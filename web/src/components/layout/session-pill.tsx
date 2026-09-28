@@ -1,0 +1,80 @@
+"use client";
+
+import { useEffect, useState, type ReactElement } from "react";
+
+import { IconDatabase, IconLock } from "@/components/ui/icons";
+import { useSession } from "@/hooks/use-session";
+import { t } from "@/lib/i18n";
+
+/**
+ * Session status pill.
+ *
+ * Shows the two facts a user needs to trust the app with an API key: how long
+ * the sliding window has left, and whether anything is indexed. The countdown
+ * ticks locally from the server-reported expiry so it stays accurate without
+ * polling.
+ */
+
+export function SessionPill(): ReactElement {
+  const { pipeline, expiresAt, hasPipeline, engineConfigured, snapshot, refetch } = useSession();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (expiresAt !== null && expiresAt - now <= 0) {
+      refetch();
+    }
+  }, [expiresAt, now, refetch]);
+
+  const remaining =
+    expiresAt === null ? null : Math.max(0, Math.floor((expiresAt - now) / 1000));
+  const expired = remaining !== null && remaining <= 0;
+
+  const format = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+  };
+
+  const sharedStore = snapshot?.capabilities.sharedStore ?? true;
+
+  return (
+    <div className="hidden items-center gap-2 sm:flex">
+      {engineConfigured ? null : (
+        <span className="badge-danger">
+          <IconDatabase className="h-3.5 w-3.5" />
+          {t("status.engineMissing")}
+        </span>
+      )}
+      {sharedStore ? null : (
+        <span className="badge-warn" title={t("session.noSharedStore")}>
+          {t("status.noSharedStore")}
+        </span>
+      )}
+      <span className={hasPipeline ? "badge-brand" : "badge"}>
+        <IconDatabase className="h-3.5 w-3.5" />
+        {hasPipeline
+          ? t("create.success", {
+              chunks: pipeline?.chunkCount ?? 0,
+              documents: pipeline?.documents.length ?? 0,
+            })
+          : t("session.pipelineMissing")}
+      </span>
+      <span
+        className={`badge font-mono text-[11px] ${expired ? "badge-danger" : ""}`}
+        title={t("session.storageNotice")}
+      >
+        <IconLock className="h-3.5 w-3.5" />
+        {remaining === null ? "--:--" : format(remaining)}
+      </span>
+    </div>
+  );
+}

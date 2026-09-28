@@ -1,0 +1,2 @@
+# E2E fixtures are generated per run by scripts/make-fixture.mjs.
+.fixtures/

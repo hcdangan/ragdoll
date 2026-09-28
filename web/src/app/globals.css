@@ -1,0 +1,296 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens sampled from the RAGdoll logo.
+ * The navy/cyan/cream ramps are semantic, not literal: in dark mode the low
+ * numbers become the *darker* end of the ramp. Components therefore style
+ * themselves with `bg-navy-900 text-cream-50` and stay correct in both themes.
+ */
+:root {
+  color-scheme: light;
+
+  --navy-50: 234 242 246;
+  --navy-100: 206 226 234;
+  --navy-200: 162 201 215;
+  --navy-300: 111 167 189;
+  --navy-400: 63 128 152;
+  --navy-500: 26 91 114;
+  --navy-600: 21 74 94;
+  --navy-700: 16 61 79;
+  --navy-800: 12 48 63;
+  --navy-900: 8 36 48;
+  --navy: var(--navy-900);
+
+  --cyan-50: 230 248 254;
+  --cyan-100: 204 238 252;
+  --cyan-200: 154 222 250;
+  --cyan-300: 94 189 242;
+  --cyan-400: 45 155 226;
+  --cyan-500: 26 123 209;
+  --cyan-600: 17 100 184;
+  --cyan-700: 12 79 148;
+  --cyan: var(--cyan-500);
+
+  --cream-50: 251 248 242;
+  --cream-100: 246 241 231;
+  --cream-200: 238 230 214;
+  --cream-300: 226 215 195;
+  --cream: var(--cream-50);
+
+  --ember-400: 248 176 96;
+  --ember-500: 240 138 50;
+  --ember-600: 214 108 24;
+  --ember: var(--ember-500);
+
+  --surface: 255 255 255;
+  --surface-muted: 246 243 236;
+  --surface-raised: 255 255 255;
+
+  --line: 222 232 236;
+  --line-strong: 186 205 212;
+
+  --ink: 8 36 48;
+  --ink-muted: 58 86 99;
+  --ink-subtle: 108 130 141;
+  --ink-inverted: 250 250 247;
+
+  --success: 22 132 96;
+  --warning: 197 122 16;
+  --danger: 198 58 58;
+
+  --radius-control: 0.75rem;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --navy-50: 8 36 48;
+  --navy-100: 12 48 63;
+  --navy-200: 16 61 79;
+  --navy-300: 21 74 94;
+  --navy-400: 30 96 118;
+  --navy-500: 63 128 152;
+  --navy-600: 111 167 189;
+  --navy-700: 162 201 215;
+  --navy-800: 206 226 234;
+  --navy-900: 234 242 246;
+
+  --cyan-50: 10 38 52;
+  --cyan-100: 12 51 70;
+  --cyan-200: 14 68 94;
+  --cyan-300: 20 96 130;
+  --cyan-400: 45 155 226;
+  --cyan-500: 84 183 242;
+  --cyan-600: 133 208 248;
+  --cyan-700: 178 226 251;
+
+  --cream-50: 246 250 251;
+  --cream-100: 226 238 242;
+  --cream-200: 186 205 212;
+  --cream-300: 132 158 168;
+
+  --ember-400: 248 176 96;
+  --ember-500: 250 160 74;
+  --ember-600: 252 196 130;
+
+  --surface: 9 23 31;
+  --surface-muted: 14 32 42;
+  --surface-raised: 19 41 52;
+
+  --line: 30 56 68;
+  --line-strong: 47 80 95;
+
+  --ink: 240 247 249;
+  --ink-muted: 178 199 208;
+  --ink-subtle: 138 163 174;
+  --ink-inverted: 6 22 30;
+
+  --success: 61 190 142;
+  --warning: 233 168 62;
+  --danger: 240 122 122;
+}
+
+@layer base {
+  * {
+    @apply border-line;
+  }
+
+  html {
+    @apply scroll-smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-cream-100 text-ink antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-cyan-500 ring-offset-2 ring-offset-surface;
+  }
+
+  ::selection {
+    @apply bg-cyan-200 text-navy-900;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight text-balance;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-card;
+  }
+
+  .card-muted {
+    @apply rounded-2xl border border-line bg-surface-muted;
+  }
+
+  .section-title {
+    @apply text-sm font-semibold uppercase tracking-[0.14em] text-ink-subtle;
+  }
+
+  .field-label {
+    @apply flex items-center gap-2 text-sm font-medium text-ink;
+  }
+
+  .field-hint {
+    @apply text-xs leading-relaxed text-ink-subtle;
+  }
+
+  .field-error {
+    @apply flex items-start gap-2 text-xs font-medium text-danger;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink
+      shadow-sm transition-colors duration-150 placeholder:text-ink-subtle
+      hover:border-line-strong focus:border-cyan-500 disabled:cursor-not-allowed
+      disabled:bg-surface-muted disabled:text-ink-subtle;
+  }
+
+  .input-mono {
+    @apply input font-mono text-[13px];
+  }
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 whitespace-nowrap
+      rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150
+      ease-brand disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-cyan-500 text-white shadow-card hover:bg-cyan-600 active:translate-y-px
+      disabled:hover:bg-cyan-500;
+  }
+
+  .btn-secondary {
+    @apply btn border border-line bg-surface text-ink hover:border-line-strong
+      hover:bg-surface-muted active:translate-y-px;
+  }
+
+  .btn-ghost {
+    @apply btn text-ink-muted hover:bg-surface-muted hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply btn border border-danger/40 bg-danger/10 text-danger hover:bg-danger/20;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full border border-line bg-surface-muted
+      px-2.5 py-0.5 text-xs font-medium text-ink-muted;
+  }
+
+  .badge-brand {
+    @apply badge border-cyan-300/60 bg-cyan-100 text-cyan-700;
+  }
+
+  .badge-warn {
+    @apply badge border-warning/40 bg-warning/10 text-warning;
+  }
+
+  .badge-danger {
+    @apply badge border-danger/40 bg-danger/10 text-danger;
+  }
+
+  .nav-link {
+    @apply relative inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium
+      text-ink-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink;
+  }
+
+  .nav-link-active {
+    @apply bg-cyan-100 text-cyan-700 hover:bg-cyan-100 hover:text-cyan-700;
+  }
+
+  .nav-link-disabled {
+    @apply cursor-not-allowed text-ink-subtle opacity-60 hover:bg-transparent hover:text-ink-subtle;
+  }
+
+  .slider {
+    @apply h-1.5 w-full cursor-pointer appearance-none rounded-full bg-line-strong
+      accent-cyan-500 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .slider::-webkit-slider-thumb {
+    @apply h-4 w-4 appearance-none rounded-full border-2 border-surface bg-cyan-500
+      shadow-sm transition-transform duration-150 hover:scale-110;
+  }
+
+  .slider::-moz-range-thumb {
+    @apply h-4 w-4 rounded-full border-2 border-surface bg-cyan-500 shadow-sm;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded-lg bg-surface-muted;
+  }
+
+  .citation-chip {
+    @apply inline-flex max-w-full items-center gap-1.5 truncate rounded-lg border border-cyan-300/50
+      bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--line-strong)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-line-strong;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

@@ -1,0 +1,42 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# next.js
+web/.next/
+web/out/
+web/.vercel/
+web/next-env.d.ts
+web/tsconfig.tsbuildinfo
+
+# testing
+web/coverage/
+web/playwright-report/
+web/test-results/
+web/.playwright/
+web/e2e/.fixtures/*.pdf
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+api/.vercel/
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# local tooling (the pnpm shim and the npm cache used inside the sandbox)
+.tools/
+.npm-cache/
+
+# vercel
+.vercel
+.DS_Store
+*.log

@@ -1,0 +1,22 @@
+{
+  "name": "ragdoll",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @ragdoll/web dev",
+    "build": "pnpm --filter @ragdoll/web build",
+    "start": "pnpm --filter @ragdoll/web start",
+    "lint": "pnpm --filter @ragdoll/web lint",
+    "typecheck": "pnpm --filter @ragdoll/web typecheck",
+    "test": "pnpm --filter @ragdoll/web test",
+    "e2e": "pnpm --filter @ragdoll/web e2e",
+    "assets": "node tools/slice-assets.mjs",
+    "api:dev": "python -m uvicorn app.main:app --reload --port 8000 --app-dir api",
+    "api:test": "python -m pytest api/tests -q",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test"
+  }
+}

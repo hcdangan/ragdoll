@@ -1,0 +1,88 @@
+[project]
+name = "ragdoll-engine"
+version = "1.0.0"
+description = "Retrieval engine for RAGdoll: PDF ingest, embedding, grounded generation and Ragas-style evaluation."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Harley Dangan" }]
+dependencies = [
+    "fastapi[standard]>=0.115.6,<0.200.0",
+    "pydantic>=2.10.4,<3.0.0",
+    "httpx>=0.28.1,<0.29.0",
+    "pypdf>=5.1.0,<6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4,<9.0.0",
+    "pytest-asyncio>=0.25.0,<1.0.0",
+    "ruff==0.8.6",
+    "mypy==1.14.1",
+    "pip-audit>=2.7.3,<3.0.0",
+]
+
+[tool.vercel]
+entrypoint = "api.index:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# The engine is composed into the Vercel function by path, never pip-installed;
+# this block exists so `pip install -e .` still resolves for contributors.
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "DTZ", "T20", "EM", "ISC", "ICN", "LOG", "G", "PIE", "PT", "Q", "RET", "SIM", "TID", "ARG", "PL", "RUF"]
+ignore = [
+    "PLR0913",  # explicit keyword-only signatures read better than a config object here
+    "PLR0911",  # one SSE parser handles three wire protocols, so it has many early returns
+    "PLR0912",  # the evaluation loop genuinely branches
+    "PLR2004",  # magic values are named in providers.py where they matter
+    "EM101",    # exception messages are built from variables in most sites
+    "EM102",
+    "TRY003",
+    "D203",
+    "D213",
+    "ANN401",
+    "ISC001",   # conflicts with the formatter's own string handling
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004", "S101", "ARG001", "ARG002"]
+"tools/*" = ["T201", "PLR0915"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+files = ["app", "index.py"]
+exclude = ["tests/"]
+
+[[tool.mypy.overrides]]
+module = ["pypdf.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "error",
+    # Starlette's TestClient warns that its httpx integration is being replaced by
+    # an httpx2-based one. The warning is emitted at import time and there is no
+    # migration to make yet, so it is filtered by category rather than by message.
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+]
