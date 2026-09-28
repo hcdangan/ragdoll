@@ -1,9 +1,14 @@
 """Vercel Python entrypoint.
 
-Vercel looks for a module-level ASGI object in `api/index.py` (or `app.py`,
-`main.py`, `server.py`, `wsgi.py`, `asgi.py` at the root, `src/` or `app/`), and
-this file is the one it will pick up for the `ragdoll-engine` service declared in
-`vercel.json`. It simply re-exports the application built by `app.main`.
+`api/index.py` is Vercel's conventional location for a Python function inside a
+project that also contains a Next.js app: the platform auto-detects a module-level
+ASGI object here, so no service declaration is needed. `vercel.json` exposes it at
+`/engine/*` with a rewrite, so the public path does not leak the internal location.
+
+`api/` is deliberately *not* a Python package — there is no `__init__.py` — because
+Vercel loads this file as a top-level module with the project root on `sys.path`.
+The engine's modules therefore sit flat in `api/`, and this file puts that directory
+on the path so `main` resolves as a plain sibling module.
 """
 
 from __future__ import annotations
@@ -11,12 +16,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Vercel executes this file as a top-level module, so the package root has to be
-# importable before `app` can be resolved.
-_ROOT = Path(__file__).resolve().parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
 
-from app.main import app  # noqa: E402  (path setup must run first)
+from main import app  # noqa: E402  (the path insert above must run first)
 
 __all__ = ["app"]

@@ -3,7 +3,7 @@
  *
  * Run with: node tools/slice-assets.mjs
  *
- * The master logo (web/public/brand/ragdoll-logo.png) is the single source of
+ * The master logo (public/brand/ragdoll-logo.png) is the single source of
  * truth. Everything else is derived from it so the brand cannot drift.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -13,7 +13,7 @@ import { deflateSync, inflateSync } from "node:zlib";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..");
-const BRAND_DIR = join(ROOT, "web", "public", "brand");
+const BRAND_DIR = join(ROOT, "public", "brand");
 const SOURCE = join(BRAND_DIR, "ragdoll-logo.png");
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);

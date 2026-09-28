@@ -5,7 +5,7 @@ Run with the engine importable::
     python api/tools/export_openapi.py
 
 CI then runs `openapi-typescript` over the result and diffs it against
-`web/src/lib/pipeline/api-schema.d.ts`; a mismatch fails the build so a schema
+`src/lib/pipeline/api-schema.d.ts`; a mismatch fails the build so a schema
 change cannot ship without its generated types.
 """
 
@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.main import app  # noqa: E402  (path setup must run first)
+from main import app  # noqa: E402  (path setup must run first)
 
 
 def main() -> int:

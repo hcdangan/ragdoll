@@ -1,24 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
   "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm build",
   "regions": ["sin1"],
+  "rewrites": [{ "source": "/engine/(.*)", "destination": "/api/index" }],
   "functions": {
     "api/index.py": {
       "memory": 1024,
       "maxDuration": 300
-    }
-  },
-  "experimentalServices": {
-    "web": {
-      "root": "web/",
-      "framework": "nextjs",
-      "buildCommand": "pnpm --filter @ragdoll/web build",
-      "routes": [{ "src": "/(?!engine/).*", "dest": "/" }]
-    },
-    "ragdoll-engine": {
-      "root": "api/",
-      "entrypoint": "index:app",
-      "routes": [{ "src": "/engine/(.*)", "dest": "/$1" }]
     }
   },
   "headers": [

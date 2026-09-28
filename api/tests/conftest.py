@@ -19,11 +19,11 @@ from typing import Any
 
 import pytest
 
-from app.chunking import TextChunk
-from app.config import reset_settings_cache
-from app.llm import ChatCompletion, ChatMessage, ProbeResult, StreamDelta, Usage
-from app.schemas import EngineDocument, EngineSession, PipelineConfig
-from app.store import STORE, OwnedChunk
+from chunking import TextChunk
+from config import reset_settings_cache
+from llm import ChatCompletion, ChatMessage, ProbeResult, StreamDelta, Usage
+from schemas import EngineDocument, EngineSession, PipelineConfig
+from store import STORE, OwnedChunk
 
 
 @dataclass

@@ -8,7 +8,7 @@ tune chunking and retrieval, and the app assembles the index, scores it with
 Ragas-style metrics, and answers questions with page-level citations.
 
 <p align="center">
-  <img src="web/public/brand/ragdoll-logo.png" alt="RAGdoll" width="360">
+  <img src="public/brand/ragdoll-logo.png" alt="RAGdoll" width="360">
 </p>
 
 ## What it does
@@ -43,27 +43,32 @@ browser ──▶ Next.js 15 (App Router, Server Actions, BFF)
            SSE  ──▶  Next.js Route Handler  ──▶  AI SDK v5 data stream  ──▶  useChat
 ```
 
-The cookie is an opaque, HMAC-signed session id — a handle, not a container — so
-its size does not grow with the session. Everything else lives in the server-side
-store, exactly as AGENTS.md specifies.
+The cookie is an opaque, HMAC-signed session id — a handle, not a container — so its
+size does not grow with the session. Everything else lives in the server-side store,
+exactly as AGENTS.md specifies.
 
-Two runtimes, one Vercel project, declared in `vercel.json` with
-[Services](https://vercel.com/docs/services/experimental). See
-[DEPLOYMENT.md](DEPLOYMENT.md).
+**One Vercel project, imported from the repository root with no settings changed.**
+The Next.js app *is* the root, and `api/index.py` is a Python function that
+`vercel.json` publishes at `/engine/*` — which the bridge calls by default, so there
+is no service URL to configure. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Repository layout
 
 ```
-web/                Next.js 15 app (App Router, React 19, TailwindCSS)
-  src/app/          routes, Server Actions, the chat streaming bridge
-  src/lib/          session, crypto, provider table, validation, i18n
-  src/components/   UI, chat, creation form, evaluation dashboard
-  e2e/              Playwright specs (shell + full pipeline journey)
-api/                FastAPI engine
-  app/              pdf, chunking, distance, prompts, rag, evaluate, guardrails
+src/app/            routes, Server Actions, the chat streaming bridge
+src/lib/            session, engine bridge, provider table, validation, i18n
+src/components/     UI, chat, creation form, evaluation dashboard
+src/middleware.ts   session handle, plus the local /engine proxy
+e2e/                Playwright specs (shell + full pipeline journey)
+public/brand/       logo and derived cat avatar / icons
+api/                FastAPI engine (flat modules, one per concern)
+  index.py          Vercel function entrypoint
+  rag.py            ingest, retrieval, grounded generation
+  evaluate.py       the eight Ragas-style metrics
   tests/            pytest suite with a deterministic provider double
   tools/            openapi export, end-to-end HTTP smoke test
 tools/              brand asset pipeline (logo → avatar, icons)
+scripts/            E2E PDF fixture generator
 ```
 
 ## Local development
@@ -76,17 +81,22 @@ python -m venv .venv
 .venv/Scripts/activate            # Windows; source .venv/bin/activate elsewhere
 pip install -r api/requirements.txt
 RAGDOLL_DEV_PROVIDER=1 RAGDOLL_API_TOKEN=dev-token \
-  python -m uvicorn app.main:app --reload --port 8000 --app-dir api
+  python -m uvicorn main:app --reload --port 8000 --app-dir api
 
 # 2. the app
-cp web/.env.example web/.env.local   # then set RAGDOLL_API_URL=http://127.0.0.1:8000
-pnpm dev                             # http://localhost:3000
+cp .env.example .env.local        # RAGDOLL_API_URL is optional; the default is local
+pnpm dev                          # http://localhost:3000
 ```
 
 `RAGDOLL_DEV_PROVIDER=1` swaps in a deterministic offline provider, so the whole
 pipeline — ingest, retrieval, citations, the groundedness gate, streaming and the
 metric suite — runs with no API key and no network. It is refused on a hosted
 deployment.
+
+The engine's default location is the same-origin `/engine` path, which Vercel routes
+from `vercel.json`. Locally there is no Vercel router, so `src/middleware.ts` proxies
+`/engine/*` to `http://127.0.0.1:8000` (override with `RAGDOLL_LOCAL_ENGINE_URL`). Set
+`RAGDOLL_API_URL` instead if you want the bridge to talk to the engine directly.
 
 ## Testing
 
@@ -112,11 +122,11 @@ python api/tools/smoke.py http://127.0.0.1:8000 dev-token
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `RAGDOLL_SESSION_SECRET` | web | ≥32 chars; signs the session cookie. |
-| `RAGDOLL_API_TOKEN` | both | Shared secret between the bridge and the engine. Required when hosted. |
-| `RAGDOLL_API_URL` | web | Base URL of the FastAPI engine. |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | both | Optional shared session store (Upstash/Vercel KV). |
-| `RAGDOLL_HOSTED` | both | `1` makes loopback providers fail fast with the self-hosting message. |
+| `RAGDOLL_SESSION_SECRET` | web | ≥32 chars; signs the session cookie. Required in production. |
+| `RAGDOLL_API_TOKEN` | both | Shared secret between the bridge and the engine. |
+| `RAGDOLL_API_URL` | web | Only needed when the engine is deployed **separately**; the default is the same-origin `/engine` route. |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | both | Shared session store. Effectively required on Vercel — without it a session exists only on one instance. |
+| `RAGDOLL_HOSTED` | both | Vercel's own `VERCEL=1` is detected, so this is only for self-hosting behind a proxy. |
 | `RAGDOLL_DEV_PROVIDER` | api | Offline deterministic provider; ignored when hosted. |
 | `RAGDOLL_GROUNDEDNESS_THRESHOLD` | api | Faithfulness cut-off, default `0.5`. |
 

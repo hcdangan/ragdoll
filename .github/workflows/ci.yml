@@ -123,13 +123,13 @@ jobs:
       - name: Regenerate the contract
         run: |
           PYTHONPATH="$PWD/api" python api/tools/export_openapi.py
-          cd web && pnpm exec openapi-typescript ../api/openapi.json -o src/lib/pipeline/api-schema.d.ts
+          pnpm exec openapi-typescript api/openapi.json -o src/lib/pipeline/api-schema.d.ts
       - name: Fail on drift
         run: |
-          if ! git diff --quiet -- api/openapi.json web/src/lib/pipeline/api-schema.d.ts; then
-            echo "::error::The engine schema changed without regenerating web/src/lib/pipeline/api-schema.d.ts."
-            echo "Run: PYTHONPATH=\$PWD/api python api/tools/export_openapi.py && (cd web && pnpm api:types)"
-            git --no-pager diff --stat -- api/openapi.json web/src/lib/pipeline/api-schema.d.ts
+          if ! git diff --quiet -- api/openapi.json src/lib/pipeline/api-schema.d.ts; then
+            echo "::error::The engine schema changed without regenerating src/lib/pipeline/api-schema.d.ts."
+            echo "Run: PYTHONPATH=\$PWD/api python api/tools/export_openapi.py && pnpm api:types"
+            git --no-pager diff --stat -- api/openapi.json src/lib/pipeline/api-schema.d.ts
             exit 1
           fi
 
@@ -156,29 +156,29 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           python -m pip install -r api/requirements.txt
-          pnpm --filter @ragdoll/web exec playwright install --with-deps chromium
+          pnpm exec playwright install --with-deps chromium
       - name: Start the offline engine
         run: |
           RAGDOLL_DEV_PROVIDER=1 RAGDOLL_API_TOKEN=ci-engine-token-0123456789abcdef \
-            python -m uvicorn app.main:app --port 8123 --app-dir api &
+            python -m uvicorn main:app --port 8123 --app-dir api &
           for attempt in $(seq 1 30); do
             curl -sf http://127.0.0.1:8123/health && break
             sleep 1
           done
       - name: Start the app
         run: |
-          pnpm --filter @ragdoll/web build
+          pnpm build
           RAGDOLL_SESSION_SECRET=ci-session-secret-value-0123456789abcdef \
           RAGDOLL_API_TOKEN=ci-engine-token-0123456789abcdef \
           RAGDOLL_API_URL=http://127.0.0.1:8123 \
           RAGDOLL_HOSTED=0 \
-          pnpm --filter @ragdoll/web start --port 3000 &
+          pnpm start --port 3000 &
           for attempt in $(seq 1 45); do
             curl -sf http://127.0.0.1:3000/ > /dev/null && break
             sleep 1
           done
       - name: Playwright
-        run: pnpm --filter @ragdoll/web e2e
+        run: pnpm e2e
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
           RAGDOLL_API_URL: http://127.0.0.1:8123
@@ -186,5 +186,5 @@ jobs:
         if: failure()
         with:
           name: playwright-report
-          path: web/playwright-report/
+          path: playwright-report/
           retention-days: 7

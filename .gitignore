@@ -3,18 +3,18 @@ node_modules/
 .pnpm-store/
 
 # next.js
-web/.next/
-web/out/
-web/.vercel/
-web/next-env.d.ts
-web/tsconfig.tsbuildinfo
+.next/
+out/
+.vercel/
+next-env.d.ts
+tsconfig.tsbuildinfo
 
 # testing
-web/coverage/
-web/playwright-report/
-web/test-results/
-web/.playwright/
-web/e2e/.fixtures/*.pdf
+coverage/
+playwright-report/
+test-results/
+.playwright/
+e2e/.fixtures/*.pdf
 
 # python
 __pycache__/
@@ -37,6 +37,5 @@ api/.vercel/
 .npm-cache/
 
 # vercel
-.vercel
 .DS_Store
 *.log

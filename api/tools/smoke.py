@@ -4,7 +4,7 @@ Not a substitute for the pytest suite: this drives the real HTTP surface —
 authentication, multipart-free JSON ingest, SSE framing — which unit tests stub
 out. Run it after `uvicorn` is up:
 
-    RAGDOLL_DEV_PROVIDER=1 python -m uvicorn app.main:app --port 8123 --app-dir api
+    RAGDOLL_DEV_PROVIDER=1 python -m uvicorn main:app --port 8123 --app-dir api
     python api/tools/smoke.py http://127.0.0.1:8123 smoke-test-engine-token
 """
 

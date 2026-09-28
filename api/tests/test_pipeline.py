@@ -18,13 +18,13 @@ import base64
 import pytest
 from fastapi.testclient import TestClient
 
-from app import guardrails
-from app.config import reset_settings_cache
-from app.errors import GuardrailError
-from app.evaluate import Evaluator
-from app.llm import ChatMessage
-from app.main import create_app
-from app.prompts import (
+import guardrails
+from config import reset_settings_cache
+from errors import GuardrailError
+from evaluate import Evaluator
+from llm import ChatMessage
+from main import create_app
+from prompts import (
     build_answer_messages,
     build_compression_messages,
     clamp_history,
@@ -32,10 +32,10 @@ from app.prompts import (
     snippet,
     truncate_context,
 )
-from app.providers import FALLBACK_ANSWER
-from app.rag import SERVICE, RagdollService, entity_overlap
-from app.schemas import ChatTurn, EngineSession
-from app.store import STORE
+from providers import FALLBACK_ANSWER
+from rag import SERVICE, RagdollService, entity_overlap
+from schemas import ChatTurn, EngineSession
+from store import STORE
 from tests.conftest import FakeProvider, build_pdf, make_config, make_document, make_session
 
 PAGES = [
@@ -277,7 +277,7 @@ class TestEvaluation:
         assert all(sample.contexts for sample in report.samples)
 
     async def test_evaluation_requires_an_index(self, provider: FakeProvider) -> None:
-        from app.errors import ValidationError
+        from errors import ValidationError
 
         session = make_session(documents=[], session_id="no-index")
         with pytest.raises(ValidationError):
@@ -388,7 +388,7 @@ class TestHttpRoutes:
     def offline_provider(self, provider: FakeProvider, monkeypatch: pytest.MonkeyPatch) -> None:
         """Routes build their own provider; swap in the deterministic double."""
 
-        monkeypatch.setattr("app.rag.build_provider", lambda *_, **__: provider)
+        monkeypatch.setattr("rag.build_provider", lambda *_, **__: provider)
         reset_settings_cache()
 
     def client(self) -> TestClient:

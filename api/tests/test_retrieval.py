@@ -10,16 +10,16 @@ import base64
 
 import pytest
 
-from app.chunking import (
+from chunking import (
     chunk_document,
     chunk_page,
     estimate_tokens,
     normalise_text,
     truncate_to_tokens,
 )
-from app.distance import IndexedChunk, VectorIndex, l2_normalise, similarity
-from app.errors import PdfRejectedError, ValidationError
-from app.pdf import decode_base64, enforce_upload_budget, parse_document
+from distance import IndexedChunk, VectorIndex, l2_normalise, similarity
+from errors import PdfRejectedError, ValidationError
+from pdf import decode_base64, enforce_upload_budget, parse_document
 from tests.conftest import build_pdf
 
 
@@ -125,7 +125,7 @@ class TestSimilarity:
 
 
 def _indexed(text: str, index: int, page: int, vector: list[float], document: str) -> IndexedChunk:
-    from app.chunking import TextChunk
+    from chunking import TextChunk
 
     return IndexedChunk(
         chunk=TextChunk(index=index, text=text, token_count=1, page=page),
