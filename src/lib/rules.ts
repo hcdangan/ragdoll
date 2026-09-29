@@ -10,7 +10,7 @@ export const LIMITS = {
   chunkSize: { min: 128, max: 2048, step: 32, default: 512 },
   chunkOverlapPercent: { min: 10, max: 20, step: 1, default: 10 },
   maxInputTokens: { min: 256, max: 4096, step: 32, default: 1024 },
-  topK: { min: 3, max: 10, step: 1, default: 5 },
+  topK: { min: 0, max: 100, step: 1, default: 5 },
   files: { maxCount: 3, maxFileBytes: 2 * 1024 * 1024, maxTotalBytes: 6 * 1024 * 1024 },
   sessionTtlMs: 15 * 60 * 1000,
   streamingTimeoutMs: 60_000,

@@ -174,7 +174,7 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
     - Euclidean Distance
 
 ##### Top-K
-  - A slider that represents a value range between 3 to 10 and by increments or decrements of 1. Default is 5.
+  - A slider that represents a value range between 0 to 100 and by increments or decrements of 1. Default is 5. A value of 0 disables retrieval; the answer path then falls back.
 
 ##### Create RAG Pipeline
   - A button to:

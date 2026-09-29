@@ -125,7 +125,9 @@ export class VectorIndex {
       score: similarity(this.metric, query, entry.vector),
     }));
     scored.sort((left, right) => right.score - left.score);
-    return scored.slice(0, Math.max(1, topK));
+    // `topK` of 0 is meaningful: retrieve nothing and let the answer path fall
+    // back, which is what the widened 0–100 slider exposes.
+    return scored.slice(0, Math.max(0, topK));
   }
 
   /**

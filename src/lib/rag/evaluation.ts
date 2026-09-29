@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Citation, EvaluationMetric, EvaluationReport, EvaluationSample } from "../types";
+import { LIMITS } from "../rules";
 import {
   answerClaimsSupported,
   assembleMetrics,
@@ -154,7 +155,7 @@ async function scoreSample(options: {
   }
 
   if (session.index !== null) {
-    const topK = Math.min(10, Math.max(1, request.config.topK));
+    const topK = Math.min(LIMITS.topK.max, Math.max(LIMITS.topK.min, request.config.topK));
     try {
       const vector = await provider.embedOne(result.standaloneQuery);
       record("noise_sensitivity", noiseSensitivity(session.index.tailSimilarity(vector, topK)));

@@ -7,6 +7,7 @@ import type {
   DocumentSummary,
   FallbackReason,
 } from "../types";
+import { LIMITS } from "../rules";
 import { createDevProvider, isDevProviderEnabled } from "./dev-provider";
 import { type IndexedChunk, VectorIndex } from "./distance";
 import { enforce as enforceGuardrails, sanitiseRetrievedText } from "./guardrails";
@@ -280,7 +281,7 @@ async function retrieve(
   if (session.index.chunkCount === 0) {
     return [];
   }
-  const k = Math.min(10, Math.max(1, topK ?? config.topK));
+  const k = Math.min(LIMITS.topK.max, Math.max(LIMITS.topK.min, topK ?? config.topK));
   const vector = await provider.embedOne(query);
   return session.index.search(vector, k).map((hit) => ({
     owned: { documentId: hit.documentId, documentName: hit.documentName, chunk: hit.chunk },

@@ -149,7 +149,7 @@ const en = {
   "metric.euclidean": "Euclidean distance",
 
   "retrieval.topK": "Top-K",
-  "retrieval.topKHint": "Chunks retrieved per question.",
+  "retrieval.topKHint": "Chunks retrieved per question. 0 disables retrieval.",
   "retrieval.mode": "Retrieval strategy",
   "retrieval.modeHint":
     "Context injection retrieves once; agentic exposes retrieval as a tool the model can call repeatedly.",
