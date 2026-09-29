@@ -7,7 +7,7 @@ import { enginePayload } from "@/lib/pipeline/session-helpers";
 import { answerStream, recordTurn } from "@/lib/rag/service";
 import { requireApiKey } from "@/lib/secrets";
 import { loadSession, readSessionToken, saveSession, stampSession } from "@/lib/session";
-import type { Citation } from "@/lib/types";
+import type { Citation, FallbackReason } from "@/lib/types";
 
 /**
  * Streaming chat handler.
@@ -78,6 +78,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       let started = false;
       let answer = "";
       let fallback = false;
+      let fallbackReason: FallbackReason | null = null;
       let citations: Citation[] = [];
       let persisted = false;
 
@@ -169,22 +170,32 @@ export async function POST(request: NextRequest): Promise<Response> {
             }
             case "replacement": {
               startText();
-              // The groundedness gate rejected the draft. The UI message protocol
-              // can only append text, so the browser is told to swap the rendered
-              // draft for the fallback via a data part (see use-chat-stream).
+              // The answer was replaced by the fallback string. Only a failed
+              // groundedness check is "withheld": when the model declined, or
+              // retrieval found nothing, nothing was withheld, and the data part
+              // lets the browser explain the real reason instead.
+              if (event.data.reason === "unsupported") {
+                write({
+                  type: "data-status",
+                  data: { phase: "groundedness", message: "Answer withheld" },
+                  transient: true,
+                });
+              }
               write({
-                type: "data-status",
-                data: { phase: "groundedness", message: "Answer withheld" },
-                transient: true,
+                type: "data-fallback",
+                data: { answer: event.data.answer, reason: event.data.reason },
               });
-              write({ type: "data-fallback", data: { answer: event.data.answer } });
               answer = event.data.answer;
               fallback = true;
+              fallbackReason = event.data.reason;
               break;
             }
             case "done": {
               fallback = fallback || event.data.fallback;
               answer = event.data.answer;
+              if (event.data.fallbackReason !== null) {
+                fallbackReason = event.data.fallbackReason;
+              }
               if (!fallback) {
                 citations = [...event.data.citations];
               }
@@ -201,7 +212,13 @@ export async function POST(request: NextRequest): Promise<Response> {
 
         startText();
         if (fallback) {
-          write({ type: "data-fallback", data: { answer } });
+          write({
+            type: "data-fallback",
+            data:
+              fallbackReason === null
+                ? { answer }
+                : { answer, reason: fallbackReason },
+          });
         }
         write({ type: "text-end", id: textId });
         write({ type: "finish" });

@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DevProvider } from "@/lib/rag/dev-provider";
-import { FALLBACK_ANSWER, GROUNDEDNESS_SYSTEM_PROMPT } from "@/lib/rag/prompts";
+import { FALLBACK_ANSWER, GROUNDEDNESS_SYSTEM_PROMPT, SYSTEM_PROMPT } from "@/lib/rag/prompts";
 import {
   answer,
   answerStream,
   clearHistory,
   ensureIndex,
   faithfulness,
+  isDeclinedAnswer,
   recordTurn,
   reset,
   testConnection,
@@ -194,7 +195,7 @@ describe("answer", () => {
     expect(result.contexts.join(" ")).toContain("Retention is seven years");
   });
 
-  it("falls back when the context window has nothing to answer from", async () => {
+  it("reports no_context when retrieval has nothing to answer from", async () => {
     const request = { ...buildRequest(), documents: [] };
     await ensureIndex(request);
 
@@ -202,6 +203,7 @@ describe("answer", () => {
 
     expect(result.answer).toBe(FALLBACK_ANSWER);
     expect(result.citations).toEqual([]);
+    expect(result.fallbackReason).toBe("no_context");
   });
 
   it("discards an answer the groundedness gate rejects", async () => {
@@ -234,6 +236,44 @@ describe("answer", () => {
     // A withheld answer must not carry citations claiming support.
     expect(result.citations).toEqual([]);
     expect(result.faithfulness).toBe(0);
+    // Only this path may be described as "withheld" in the UI.
+    expect(result.fallbackReason).toBe("unsupported");
+  });
+
+  it("never judges a refusal, so a good 'I don't know' is not called a failed check", async () => {
+    const request = buildRequest();
+    await ensureIndex(request);
+
+    let judgeCalls = 0;
+    const original = DevProvider.prototype.complete;
+    vi.spyOn(DevProvider.prototype, "complete").mockImplementation(
+      async function patched(
+        this: DevProvider,
+        messages: readonly ChatMessage[],
+        options?: { temperature?: number; maxTokens?: number },
+      ) {
+        const system = messages.find((message) => message.role === "system")?.content ?? "";
+        if (system === GROUNDEDNESS_SYSTEM_PROMPT) {
+          judgeCalls += 1;
+        }
+        if (system === SYSTEM_PROMPT) {
+          return {
+            text: FALLBACK_ANSWER,
+            usage: { promptTokens: 1, completionTokens: 1 },
+          };
+        }
+        return original.call(this, messages, options);
+      },
+    );
+
+    const result = await answer(request, "What is the capital of Peru?");
+
+    expect(result.answer).toBe(FALLBACK_ANSWER);
+    // "The context does not say" is the model reporting honestly, not a claim that
+    // failed verification — and asking the judge about it wastes a round trip.
+    expect(result.fallbackReason).toBe("declined");
+    expect(result.faithfulness).toBeNull();
+    expect(judgeCalls).toBe(0);
   });
 
   it("refuses a jailbreak attempt before any provider call", async () => {
@@ -289,6 +329,23 @@ describe("answerStream", () => {
     expect(done?.citations).toBeGreaterThan(0);
   });
 
+  it("labels the fallback it emits so the UI can explain it", async () => {
+    const request = { ...buildRequest(), documents: [] };
+    await ensureIndex(request);
+
+    const reasons: string[] = [];
+    for await (const event of answerStream(request, "What is the retention period?")) {
+      if (event.event === "replacement") {
+        reasons.push(event.data.reason);
+      }
+      if (event.event === "done") {
+        reasons.push(`done:${String(event.data.fallbackReason)}`);
+      }
+    }
+
+    expect(reasons).toEqual(["no_context", "done:no_context"]);
+  });
+
   it("stops promptly when the caller aborts and keeps the partial answer", async () => {
     const request = buildRequest();
     await ensureIndex(request);
@@ -316,6 +373,25 @@ describe("answerStream", () => {
     // An interrupted answer is never judged: no second round trip after a stop.
     expect(done?.faithfulness).toBeNull();
     expect(done?.answer.startsWith(streamed.trim().slice(0, 8))).toBe(true);
+  });
+});
+
+describe("isDeclinedAnswer", () => {
+  it("recognises the documented refusal, however it is punctuated", () => {
+    expect(isDeclinedAnswer(FALLBACK_ANSWER)).toBe(true);
+    expect(isDeclinedAnswer(`  ${FALLBACK_ANSWER}  `)).toBe(true);
+    expect(isDeclinedAnswer(FALLBACK_ANSWER.replace(/\.$/, ""))).toBe(true);
+    expect(isDeclinedAnswer(FALLBACK_ANSWER.toUpperCase())).toBe(true);
+    expect(isDeclinedAnswer("")).toBe(true);
+    expect(isDeclinedAnswer("   \n ")).toBe(true);
+  });
+
+  it("does not mistake a real answer for a refusal", () => {
+    expect(isDeclinedAnswer("Retention is seven years [handbook.pdf, p.1].")).toBe(false);
+    // The refusal's own wording inside a longer, substantive answer is not a refusal.
+    expect(
+      isDeclinedAnswer("The document does not state the retention period, but it does say records are archived."),
+    ).toBe(false);
   });
 });
 

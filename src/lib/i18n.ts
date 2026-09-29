@@ -222,6 +222,8 @@ const en = {
   "chat.error": "The response failed: {message}",
   "chat.retry": "Try again",
   "chat.fallbackNotice": "The answer failed the groundedness check and was withheld.",
+  "chat.declinedNotice": "Your documents don't appear to contain the answer to that.",
+  "chat.noMatchNotice": "No matching passage was found in your documents for that question.",
   "chat.contextWarning.title": "Context window reached",
   "chat.contextWarning.body":
     "This conversation has filled the {tokens} token context window. Start a new chat session to continue — your pipeline, PDFs and settings are kept.",

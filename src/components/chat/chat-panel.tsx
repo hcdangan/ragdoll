@@ -15,12 +15,25 @@ import {
   messageText,
   type CitationData,
   type ChatErrorData,
+  type FallbackData,
   type RagdollUIMessage,
 } from "@/lib/chat-message";
 import { useSession } from "@/hooks/use-session";
-import { t } from "@/lib/i18n";
+import { t, type TranslationKey } from "@/lib/i18n";
 import { exceedsContextWindow } from "@/lib/rules";
-import type { Citation } from "@/lib/types";
+import type { Citation, FallbackReason } from "@/lib/types";
+
+/**
+ * Copy for each reason an answer came back as the fallback string.
+ *
+ * Reporting every one of them as a failed groundedness check is what made a
+ * perfectly good "I don't know" look like a bug in the pipeline.
+ */
+const FALLBACK_NOTICE: Readonly<Record<FallbackReason, TranslationKey>> = {
+  unsupported: "chat.fallbackNotice",
+  declined: "chat.declinedNotice",
+  no_context: "chat.noMatchNotice",
+};
 
 /**
  * Chat surface.
@@ -47,7 +60,7 @@ export function ChatPanel(): ReactElement {
   const { canChat, hasPipeline, pipeline } = useSession();
   const [input, setInput] = useState("");
   const [citations, setCitations] = useState<readonly Citation[]>([]);
-  const [fallbackNotice, setFallbackNotice] = useState(false);
+  const [fallbackReason, setFallbackReason] = useState<FallbackReason | null>(null);
   const [errorState, setErrorState] = useState<ChatErrorData | null>(null);
   const [contextWarning, setContextWarning] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -70,9 +83,9 @@ export function ChatPanel(): ReactElement {
       onData: (part) => {
         if (part.type === "data-citation") {
           setCitations((part.data as CitationData).citations);
-          setFallbackNotice(false);
+          setFallbackReason(null);
         } else if (part.type === "data-fallback") {
-          setFallbackNotice(true);
+          setFallbackReason((part.data as FallbackData).reason ?? "unsupported");
         } else if (part.type === "data-error") {
           setErrorState(part.data as ChatErrorData);
         }
@@ -108,7 +121,7 @@ export function ChatPanel(): ReactElement {
       }
       setMessages([]);
       setCitations([]);
-      setFallbackNotice(false);
+      setFallbackReason(null);
       setContextWarning(false);
     } finally {
       setResetting(false);
@@ -134,7 +147,7 @@ export function ChatPanel(): ReactElement {
       }
       setInput("");
       setCitations([]);
-      setFallbackNotice(false);
+      setFallbackReason(null);
       setErrorState(null);
       setContextWarning(overBudget);
       void sendMessage({ text: question });
@@ -146,7 +159,7 @@ export function ChatPanel(): ReactElement {
   const clearConversation = useCallback(() => {
     setMessages([]);
     setCitations([]);
-    setFallbackNotice(false);
+    setFallbackReason(null);
     setErrorState(null);
     setContextWarning(false);
   }, [setMessages]);
@@ -333,7 +346,7 @@ export function ChatPanel(): ReactElement {
         </p>
       </div>
 
-      <CitationPanel citations={citations} fallbackNotice={fallbackNotice} />
+      <CitationPanel citations={citations} fallbackReason={fallbackReason} />
     </div>
   );
 }
@@ -392,8 +405,10 @@ function ChatBubble({
           )}
         </div>
 
-        {fallback ? (
-          <p className="field-hint mt-1 text-warning">{t("chat.fallbackNotice")}</p>
+        {fallback !== null ? (
+          <p className="field-hint mt-1 text-warning">
+            {t(FALLBACK_NOTICE[fallback.reason ?? "unsupported"])}
+          </p>
         ) : null}
 
         {localError !== null ? (
@@ -437,10 +452,10 @@ function ChatBubble({
 /** Citation rail, populated before the first token arrives. */
 function CitationPanel({
   citations,
-  fallbackNotice,
+  fallbackReason,
 }: {
   readonly citations: readonly Citation[];
-  readonly fallbackNotice: boolean;
+  readonly fallbackReason: FallbackReason | null;
 }): ReactElement {
   return (
     <aside className="card h-fit p-4 lg:sticky lg:top-20" aria-label={t("citations.title")}>
@@ -453,9 +468,9 @@ function CitationPanel({
         ) : null}
       </div>
 
-      {fallbackNotice ? (
+      {fallbackReason !== null ? (
         <p className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-          {t("chat.fallbackNotice")}
+          {t(FALLBACK_NOTICE[fallbackReason])}
         </p>
       ) : null}
 

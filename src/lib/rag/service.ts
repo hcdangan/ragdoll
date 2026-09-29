@@ -1,6 +1,12 @@
 import "server-only";
 
-import type { PipelineConfig, ChatTurn, Citation, DocumentSummary } from "../types";
+import type {
+  PipelineConfig,
+  ChatTurn,
+  Citation,
+  DocumentSummary,
+  FallbackReason,
+} from "../types";
 import { createDevProvider, isDevProviderEnabled } from "./dev-provider";
 import { type IndexedChunk, VectorIndex } from "./distance";
 import { enforce as enforceGuardrails, sanitiseRetrievedText } from "./guardrails";
@@ -75,11 +81,37 @@ export interface AnswerResult {
   readonly answer: string;
   readonly citations: readonly Citation[];
   readonly fallback: boolean;
+  /** Set whenever `fallback` is true, so the caller can explain the outcome. */
+  readonly fallbackReason: FallbackReason | null;
   readonly standaloneQuery: string;
   readonly retrieved: number;
   readonly usage: Usage;
   readonly faithfulness: number | null;
   readonly contexts: readonly string[];
+}
+
+/**
+ * True when the model itself declined instead of answering.
+ *
+ * The system prompt requires this exact string when the context does not contain
+ * the answer, so a match is the model reporting "no answer here" — not a claim
+ * anyone should fact-check. Judging it would score a truthful refusal as
+ * unsupported and report a groundedness failure that never happened.
+ * @param text Completion text as returned by the provider.
+ */
+export function isDeclinedAnswer(text: string): boolean {
+  // Order matters: trailing whitespace has to go before trailing punctuation,
+  // otherwise " Sorry, I don't know the answer to that. " keeps its full stop and
+  // never matches the reference string it is being compared against.
+  const normalise = (value: string): string =>
+    value
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/[.!?"'`]+$/, "")
+      .trim()
+      .toLowerCase();
+  const candidate = normalise(text);
+  return candidate.length === 0 || candidate === normalise(FALLBACK_ANSWER);
 }
 
 /**
@@ -333,10 +365,18 @@ async function compressQuery(
   }
 }
 
-/** Reserves room for history and the answer inside the configured context window. */
+/**
+ * Splits the configured window between history and retrieved context.
+ *
+ * `maxInputTokens` bounds the *prompt*, and the generated answer is not part of the
+ * prompt — so nothing is reserved for it here. Reserving 512 tokens for the output
+ * left a quarter of a 1024-token window for the documents, which is one chunk: too
+ * little for the model to find an answer that spans more than the single best
+ * passage, and the reason a pipeline answers one question and declines the next.
+ */
 function clampToWindow(config: PipelineConfig, hits: readonly ScoredChunk[]): OwnedChunk[] {
   const historyBudget = Math.min(1024, Math.floor(config.maxInputTokens / 4));
-  const contextBudget = Math.max(256, config.maxInputTokens - historyBudget - 512);
+  const contextBudget = Math.max(128, config.maxInputTokens - historyBudget);
   return truncateContext(sanitise(hits), contextBudget);
 }
 
@@ -488,6 +528,7 @@ export async function answer(
       answer: FALLBACK_ANSWER,
       citations: [],
       fallback: true,
+      fallbackReason: "no_context",
       standaloneQuery: standalone,
       retrieved: 0,
       usage: { promptTokens: 0, completionTokens: 0 },
@@ -510,18 +551,25 @@ export async function answer(
   );
 
   let answerText = completion.text.trim();
-  let fallback = answerText.length === 0;
-  if (fallback) {
+  let fallbackReason: FallbackReason | null = null;
+  let score: number | null = null;
+
+  if (isDeclinedAnswer(answerText)) {
+    // The model says the context does not answer the question. There is nothing to
+    // fact-check, and judging a refusal would report a groundedness failure.
     answerText = FALLBACK_ANSWER;
+    fallbackReason = "declined";
+  } else {
+    // A judge that cannot run keeps the answer: discarding a possibly fine answer on
+    // an infrastructure failure would be worse than the unsupported claims risk.
+    score = await faithfulness(provider, contextBlock, answerText);
+    if (score !== null && score < GROUNDEDNESS_THRESHOLD) {
+      answerText = FALLBACK_ANSWER;
+      fallbackReason = "unsupported";
+    }
   }
 
-  // A judge that cannot run keeps the answer: discarding a possibly fine answer on
-  // an infrastructure failure would be worse than the unsupported claims risk.
-  const score = fallback ? null : await faithfulness(provider, contextBlock, answerText);
-  if (score !== null && score < GROUNDEDNESS_THRESHOLD) {
-    answerText = FALLBACK_ANSWER;
-    fallback = true;
-  }
+  const fallback = fallbackReason !== null;
 
   // A withheld answer must not carry citations claiming support.
   const citations = fallback ? [] : toCitations(keptHits(hits, kept));
@@ -530,6 +578,7 @@ export async function answer(
     answer: answerText,
     citations,
     fallback,
+    fallbackReason,
     standaloneQuery: standalone,
     retrieved: hits.length,
     usage: completion.usage,
@@ -550,12 +599,16 @@ export type StreamEvent =
       };
     }
   | { readonly event: "token"; readonly data: { text: string } }
-  | { readonly event: "replacement"; readonly data: { answer: string } }
+  | {
+      readonly event: "replacement";
+      readonly data: { answer: string; reason: FallbackReason };
+    }
   | {
       readonly event: "done";
       readonly data: {
         answer: string;
         fallback: boolean;
+        fallbackReason: FallbackReason | null;
         faithfulness: number | null;
         usage: Usage;
         citations: readonly Citation[];
@@ -605,12 +658,13 @@ export async function* answerStream(
   // No evidence means no answer: the fallback is emitted without a generation call
   // at all, which is both the documented behaviour and one fewer billed request.
   if (kept.length === 0) {
-    yield { event: "replacement", data: { answer: FALLBACK_ANSWER } };
+    yield { event: "replacement", data: { answer: FALLBACK_ANSWER, reason: "no_context" } };
     yield {
       event: "done",
       data: {
         answer: FALLBACK_ANSWER,
         fallback: true,
+        fallbackReason: "no_context",
         faithfulness: null,
         usage: { promptTokens: 0, completionTokens: 0 },
         citations: [],
@@ -644,32 +698,37 @@ export async function* answerStream(
 
   answerText = answerText.trim();
   let score: number | null = null;
-  let fallback = false;
+  let fallbackReason: FallbackReason | null = null;
 
   // An interrupted answer is judged on nothing: the user stopped it, and spending
   // another provider round trip after an abort is exactly what stop is meant to
   // prevent. The partial text is kept as-is.
   const interrupted = signal?.aborted === true;
 
-  if (!interrupted && answerText.length > 0) {
+  if (!interrupted && isDeclinedAnswer(answerText)) {
+    // A refusal is not a claim: judging it would only confirm that "I don't know"
+    // is unsupported by the context and report a groundedness failure.
+    answerText = FALLBACK_ANSWER;
+    fallbackReason = "declined";
+    yield { event: "replacement", data: { answer: FALLBACK_ANSWER, reason: "declined" } };
+  } else if (!interrupted) {
     yield { event: "status", data: { phase: "groundedness", message: "Checking groundedness" } };
     score = await faithfulness(provider, contextBlock, answerText);
     if (score !== null && score < GROUNDEDNESS_THRESHOLD) {
       answerText = FALLBACK_ANSWER;
-      fallback = true;
-      yield { event: "replacement", data: { answer: FALLBACK_ANSWER } };
+      fallbackReason = "unsupported";
+      yield { event: "replacement", data: { answer: FALLBACK_ANSWER, reason: "unsupported" } };
     }
-  } else if (!interrupted && answerText.length === 0) {
-    answerText = FALLBACK_ANSWER;
-    fallback = true;
-    yield { event: "replacement", data: { answer: FALLBACK_ANSWER } };
   }
+
+  const fallback = fallbackReason !== null;
 
   yield {
     event: "done",
     data: {
       answer: answerText,
       fallback,
+      fallbackReason,
       faithfulness: score,
       usage,
       citations: fallback ? [] : citations,

@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 
-import type { Citation } from "./types";
+import type { Citation, FallbackReason } from "./types";
 
 /**
  * Chat message contract shared by the route handler, the transport and the
@@ -15,6 +15,11 @@ export interface CitationData {
 
 export interface FallbackData {
   readonly answer: string;
+  /**
+   * Why the answer was replaced. Optional because a draft recovered from an older
+   * deployment's stream may not carry it; the default copy is the cautious one.
+   */
+  readonly reason?: FallbackReason;
 }
 
 export interface ChatErrorData {
@@ -65,7 +70,7 @@ export const messageError = (message: RagdollUIMessage): ChatErrorData | null =>
   return null;
 };
 
-/** True when the groundedness gate replaced the drafted answer. */
+/** The fallback payload of a message, if the answer was replaced. */
 export const messageFallback = (message: RagdollUIMessage): FallbackData | null => {
   for (let index = message.parts.length - 1; index >= 0; index -= 1) {
     const part = message.parts[index];

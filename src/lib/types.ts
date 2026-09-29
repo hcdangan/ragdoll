@@ -103,9 +103,21 @@ export interface ChatTurn {
   readonly content: string;
   readonly citations: readonly Citation[];
   readonly createdAt: string;
-  /** True when the answer was replaced by the groundedness fallback string. */
+  /** True when the fallback string was emitted, for any of the reasons below. */
   readonly fallback?: boolean;
 }
+
+/**
+ * Why an answer was replaced by the fallback string.
+ *
+ * Three different situations with three different remedies, so the UI must not
+ * collapse them: `no_context` means nothing was retrieved at all, `declined` means
+ * the model found no answer in what was retrieved, and `unsupported` means a real
+ * answer failed the groundedness check. Telling a user their answer "failed the
+ * groundedness check" when the model simply had nothing to work with sends them
+ * looking for a problem they do not have.
+ */
+export type FallbackReason = "no_context" | "declined" | "unsupported";
 
 export interface PipelineSummary {
   readonly config: PipelineConfig;
