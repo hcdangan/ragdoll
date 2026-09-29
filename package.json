@@ -23,11 +23,7 @@
     "@ai-sdk/react": "^2.0.30",
     "@tanstack/react-query": "^5.62.7",
     "ai": "^5.0.30",
-<<<<<<< HEAD
     "next": "15.5.26",
-=======
-    "next": "15.5.9",
->>>>>>> 0c1b626634b44be1c65a8cac6a92b15d240bb905
     "react": "^19.1.2",
     "react-dom": "^19.1.2",
     "server-only": "^0.0.1",

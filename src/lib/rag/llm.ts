@@ -141,12 +141,18 @@ class ResponseFormatError extends Error {
   }
 }
 
-/** Why a request failed, in the form the backoff loop reasons about. */
+/**
+ * Why a request failed, in the form the backoff loop reasons about.
+ *
+ * The API-facing code is decided here, once, at classification time: it is the only
+ * place that knows whether a 401 was a rejected key or a 429 that merely ran out of
+ * retries. Deriving it afterwards from `retryable` alone cannot tell the two apart,
+ * and getting it wrong offers the user a retry for a key that will never work.
+ */
 interface RequestFailure {
   readonly message: string;
   readonly retryable: boolean;
-  /** Loopback/LAN and timeout failures are unreachable, not malformed. */
-  readonly unreachable: boolean;
+  readonly code: ProviderError["code"];
 }
 
 /** Terminal state of the retry loop: exactly one of the two fields is set. */
@@ -264,21 +270,21 @@ const composeSignal = (timeoutMs: number, outer?: AbortSignal): AbortSignal => {
 /** Maps a `fetch` rejection to its API-facing failure, preserving the abort path. */
 const classifyRequestFailure = (error: unknown, baseUrl: string): RequestFailure => {
   if (error instanceof ResponseFormatError) {
-    return { message: error.message, retryable: false, unreachable: false };
+    return { message: error.message, retryable: false, code: "provider_error" };
   }
   const name = errorName(error);
   if (name === "TimeoutError") {
     return {
       message: `Could not reach the provider at ${baseUrl} (timed out).`,
       retryable: true,
-      unreachable: true,
+      code: "provider_unreachable",
     };
   }
   if (name === "AbortError") {
     return {
       message: "The request was aborted by the caller.",
       retryable: false,
-      unreachable: true,
+      code: "provider_unreachable",
     };
   }
   const code = transportCode(error);
@@ -286,7 +292,7 @@ const classifyRequestFailure = (error: unknown, baseUrl: string): RequestFailure
   return {
     message: `Could not reach the provider at ${baseUrl}.${detail}`,
     retryable: true,
-    unreachable: true,
+    code: "provider_unreachable",
   };
 };
 
@@ -297,25 +303,18 @@ const classifyStatusFailure = (status: number, detail: string, baseUrl: string):
     return {
       message: "The provider rejected the API key. Check the key and provider selection.",
       retryable: false,
-      unreachable: false,
-    };
-  }
-  if (RETRYABLE_STATUSES.has(status)) {
-    return {
-      message: `The provider at ${baseUrl} returned HTTP ${status}.${suffix}`,
-      retryable: true,
-      unreachable: false,
+      code: "invalid_api_key",
     };
   }
   return {
     message: `The provider at ${baseUrl} returned HTTP ${status}.${suffix}`,
-    retryable: false,
-    unreachable: false,
+    retryable: RETRYABLE_STATUSES.has(status),
+    code: "provider_error",
   };
 };
 
 const toProviderError = (failure: RequestFailure): ProviderError =>
-  new ProviderError(failure.message, failure.unreachable ? "provider_unreachable" : "provider_error");
+  new ProviderError(failure.message, failure.code);
 
 /** Reads a response body, keeping a non-JSON error page readable for the message. */
 const readBodyText = async (response: Response): Promise<string> => {
@@ -531,19 +530,43 @@ export class ProviderClient implements LlmProvider {
     return headers;
   }
 
+  /**
+   * Builds a chat request in the protocol this provider actually speaks.
+   *
+   * The two are not interchangeable, and the difference is not cosmetic: OpenAI's
+   * schema rejects unknown arguments outright (`Unrecognized request argument
+   * supplied: num_predict`), so a field that helps Ollama breaks every
+   * OpenAI-compatible endpoint, Vocareum included. Sampling controls also live in
+   * different places — top level for OpenAI, nested under `options` for Ollama —
+   * so one shared shape cannot be correct for both.
+   */
   private chatBody(
     messages: readonly ChatMessage[],
     options?: CompletionOptions,
   ): Readonly<Record<string, unknown>> {
     const body: Record<string, unknown> = { model: this.options.model, messages, stream: false };
-    // Fields are copied explicitly rather than spread: `options` also carries the caller's
-    // AbortSignal, which is not JSON and must never reach the wire.
+
+    if (this.usesOllama) {
+      // Fields are copied explicitly rather than spread: `options` also carries the
+      // caller's AbortSignal, which is not JSON and must never reach the wire.
+      const sampling: Record<string, unknown> = {};
+      if (options?.temperature !== undefined) {
+        sampling.temperature = options.temperature;
+      }
+      if (options?.maxTokens !== undefined) {
+        sampling.num_predict = options.maxTokens;
+      }
+      if (Object.keys(sampling).length > 0) {
+        body.options = sampling;
+      }
+      return body;
+    }
+
     if (options?.temperature !== undefined) {
       body.temperature = options.temperature;
     }
     if (options?.maxTokens !== undefined) {
       body.max_tokens = options.maxTokens;
-      body.num_predict = options.maxTokens;
     }
     return body;
   }
@@ -586,7 +609,7 @@ export class ProviderClient implements LlmProvider {
     let last: RequestFailure = {
       message: `Could not reach the provider at ${this.baseUrl}.`,
       retryable: false,
-      unreachable: true,
+      code: "provider_unreachable",
     };
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
@@ -596,7 +619,7 @@ export class ProviderClient implements LlmProvider {
           error: {
             message: "The request was aborted by the caller.",
             retryable: false,
-            unreachable: true,
+            code: "provider_unreachable",
           },
         };
       }
