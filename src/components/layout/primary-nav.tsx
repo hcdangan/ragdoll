@@ -88,14 +88,17 @@ export function PrimaryNav(): ReactElement {
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-surface/85 backdrop-blur">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+      <div className="mx-auto flex h-20 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
         <BrandLockup />
 
-        <nav aria-label={t("nav.primary")} className="ml-2 hidden md:block">
+        {/* The full rail needs the `lg` breakpoint: with the brand plate, four
+            destinations and the session pill, `md` (768px) overflows and the
+            items overlap each other. */}
+        <nav aria-label={t("nav.primary")} className="ml-2 hidden min-w-0 lg:block">
           <ul className="flex items-center gap-1">{items}</ul>
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <SessionPill />
           <button
             type="button"
@@ -111,7 +114,7 @@ export function PrimaryNav(): ReactElement {
             onClick={() => {
               setMenuOpen((open) => !open);
             }}
-            className="btn-ghost h-10 w-10 !px-0 md:hidden"
+            className="btn-ghost h-10 w-10 !px-0 lg:hidden"
             aria-expanded={menuOpen}
             aria-controls="mobile-nav"
             aria-label={menuOpen ? t("nav.closeMenu") : t("nav.menu")}
@@ -125,7 +128,7 @@ export function PrimaryNav(): ReactElement {
         <nav
           id="mobile-nav"
           aria-label={t("nav.primary")}
-          className="border-t border-line bg-surface px-4 pb-4 pt-2 md:hidden"
+          className="border-t border-line bg-surface px-4 pb-4 pt-2 lg:hidden"
         >
           <ul className="flex flex-col gap-1">{items}</ul>
         </nav>

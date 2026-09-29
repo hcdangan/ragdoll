@@ -238,20 +238,53 @@ const resize = (image, width, height) => {
 };
 
 /**
- * Removes the flat brand background, keeping the illustration and softening edges.
+ * Averaged colour of the four corners, which the master logo fills with a flat
+ * off-white field.
  * @param {{ width: number, height: number, rgba: Buffer }} image
+ * @returns {number[]}
  */
-const transparencyFromBackground = (image) => {
-  const rgba = Buffer.from(image.rgba);
-  const samples = [
-    0,
-    (image.width - 1) * 4,
-    (image.height - 1) * image.width * 4,
-    ((image.height - 1) * image.width + image.width - 1) * 4,
-  ];
-  const background = [0, 1, 2].map(
+const backgroundColour = (image) => {
+  const { rgba, width, height } = image;
+  const samples = [0, (width - 1) * 4, (height - 1) * width * 4, ((height - 1) * width + width - 1) * 4];
+  return [0, 1, 2].map(
     (channel) => samples.reduce((total, index) => total + rgba[index + channel], 0) / samples.length,
   );
+};
+
+/**
+ * Paints a rectangle pure white.
+ *
+ * Used to erase logo elements that are not part of the illustration being
+ * extracted: cropping them out instead would slice them in half and leave a hard
+ * edge, which is exactly the overcrop this script exists to avoid. Called after
+ * `backgroundToWhite`, so the field it blends into is already white.
+ * @param {{ width: number, height: number, rgba: Buffer }} image
+ * @param {{ x: number, y: number, width: number, height: number }} box
+ */
+const paintWhite = (image, box) => {
+  for (let y = box.y; y < Math.min(box.y + box.height, image.height); y += 1) {
+    for (let x = box.x; x < Math.min(box.x + box.width, image.width); x += 1) {
+      const target = (y * image.width + x) * 4;
+      image.rgba[target] = 255;
+      image.rgba[target + 1] = 255;
+      image.rgba[target + 2] = 255;
+      image.rgba[target + 3] = 255;
+    }
+  }
+  return image;
+};
+
+/**
+ * Replaces the flat brand background with pure white.
+ *
+ * The logo is a light illustration on a light field: dropped onto a dark surface
+ * it stops reading as a logo at all. Baking the field in means every consumer —
+ * including the ones that forget a plate — shows the mark on white.
+ * @param {{ width: number, height: number, rgba: Buffer }} image
+ */
+const backgroundToWhite = (image) => {
+  const rgba = Buffer.from(image.rgba);
+  const background = backgroundColour(image);
 
   for (let i = 0; i < rgba.length; i += 4) {
     const distance = Math.max(
@@ -259,10 +292,19 @@ const transparencyFromBackground = (image) => {
       Math.abs(rgba[i + 1] - background[1]),
       Math.abs(rgba[i + 2] - background[2]),
     );
-    if (distance <= 8) {
-      rgba[i + 3] = 0;
-    } else if (distance < 24) {
-      rgba[i + 3] = Math.round((255 * (distance - 8)) / 16);
+    if (distance <= 10) {
+      rgba[i] = 255;
+      rgba[i + 1] = 255;
+      rgba[i + 2] = 255;
+      rgba[i + 3] = 255;
+    } else if (distance < 26) {
+      // Feather the outline's antialiasing towards white rather than leaving the
+      // off-white halo the master carries.
+      const blend = (distance - 10) / 16;
+      for (const channel of [0, 1, 2]) {
+        rgba[i + channel] = Math.round(255 - (255 - rgba[i + channel]) * blend);
+      }
+      rgba[i + 3] = 255;
     }
   }
   return { width: image.width, height: image.height, rgba };
@@ -272,20 +314,34 @@ const main = async () => {
   await mkdir(BRAND_DIR, { recursive: true });
   const master = decodePng(await readFile(SOURCE));
 
-  // Avatar: the RAGdoll cat illustration from the top-left of the master logo.
-  const avatarBox = { x: 56, y: 30, width: 272, height: 286 };
-  const avatar = transparencyFromBackground(crop(master, avatarBox));
+  // Avatar: the whole cat plus the document panel it rests its paw on, with the
+  // box measured against the master's pixel density rather than by eye. The
+  // previous box (x56 y30 272x286) cut the ear tips, the tail and the panel.
+  const avatarBox = { x: 14, y: 4, width: 314, height: 306 };
+  const avatar = backgroundToWhite(crop(master, avatarBox));
+  // The workflow diagram panel starts at master x≈286 and sits behind the
+  // document panel the cat leans on. Erasing only the part *above* that panel
+  // clears the diagram without touching the cat (whose flank stops at x≈272) or
+  // the panel's own right border (x≈323).
+  paintWhite(avatar, { x: 272, y: 0, width: avatar.width - 272, height: 190 });
+  // A single decorative dot from the master floats beside the cat's head; left
+  // alone it survives as a clipped cyan speck at the avatar's edge.
+  paintWhite(avatar, { x: 261, y: 0, width: avatar.width - 261, height: 70 });
 
   await writeFile(join(BRAND_DIR, "ragdoll-cat.png"), encodePng(avatar));
-  await writeFile(join(BRAND_DIR, "ragdoll-cat@2x.png"), encodePng(resize(avatar, avatar.width * 2, avatar.height * 2)));
+  await writeFile(
+    join(BRAND_DIR, "ragdoll-cat@2x.png"),
+    encodePng(resize(avatar, avatar.width * 2, avatar.height * 2)),
+  );
 
-  // Icon: the cat on the brand background, square, for favicons and store cards.
-  const icon = resize(crop(master, { x: 112, y: 44, width: 216, height: 216 }), 512, 512);
+  // Icon: the cat's head and shoulders, square, on the same white field, for
+  // favicons and store cards where the full illustration is unreadable.
+  const icon = resize(backgroundToWhite(crop(master, { x: 62, y: 10, width: 230, height: 230 })), 512, 512);
   await writeFile(join(BRAND_DIR, "icon-512.png"), encodePng(icon));
   await writeFile(join(BRAND_DIR, "icon-192.png"), encodePng(resize(icon, 192, 192)));
 
   process.stdout.write(
-    `brand assets written: cat ${avatar.width}x${avatar.height}, icon 512, plus @2x variants\n`,
+    `brand assets written: cat ${avatar.width}x${avatar.height} (uncropped), icon 512, plus @2x variants\n`,
   );
 };
 

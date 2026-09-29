@@ -418,7 +418,7 @@ export function RagCreationForm(): ReactElement {
           <h2 className="section-title">{t("create.section.documents")}</h2>
           <div className="mt-4 space-y-4">
             <div
-              className="rounded-2xl border-2 border-dashed border-line-strong bg-surface-muted px-4 py-6 text-center transition-colors hover:border-cyan-400"
+              className="rounded-2xl border-2 border-dashed border-line bg-surface-muted px-4 py-6 text-center transition-colors hover:border-cyan-400"
               onDragOver={(event) => {
                 event.preventDefault();
               }}
@@ -427,7 +427,7 @@ export function RagCreationForm(): ReactElement {
                 void onFiles(event.dataTransfer.files);
               }}
             >
-              <IconUpload className="mx-auto h-6 w-6 text-cyan-500" />
+              <IconUpload className="mx-auto h-6 w-6 text-ink" />
               <p className="mt-2 text-sm font-medium">{t("documents.dropzone")}</p>
               <p className="field-hint mt-0.5">{t("documents.dropzoneHint")}</p>
               <input

@@ -25,17 +25,24 @@ const SAMPLE_CHOICES = [2, 4, 6, 8] as const;
 const formatScore = (score: MetricResult["score"]): string =>
   score === "N/A" ? t("evaluate.na") : score.toFixed(3);
 
+/**
+ * Score tone as a chip rather than coloured text.
+ *
+ * The palette has no red and no green, and on a light field only deep teal is
+ * legible — so a score is read from its surface (blue = good, peach = weak,
+ * solid = failing) with the number always in the readable ink.
+ */
 const scoreTone = (score: MetricResult["score"]): string => {
   if (score === "N/A") {
-    return "text-ink-subtle";
+    return "border-line bg-surface";
   }
   if (score >= 0.75) {
-    return "text-success";
+    return "border-success bg-success/20";
   }
   if (score >= 0.5) {
-    return "text-warning";
+    return "border-warning bg-warning/30";
   }
-  return "text-danger";
+  return "border-danger bg-danger text-ink-inverted";
 };
 
 export function EvaluationDashboard(): ReactElement {
@@ -216,11 +223,15 @@ export function EvaluationDashboard(): ReactElement {
                       <span className="ml-2 badge">{t("status.skipped")}</span>
                     ) : null}
                   </th>
-                  <td className={`px-4 py-3 font-mono text-base font-semibold ${visible ? scoreTone(metric.score) : "text-ink-subtle"}`}>
+                  <td className="px-4 py-3">
                     {running && !visible ? (
                       <IconSpinner className="h-4 w-4" />
                     ) : (
-                      formatScore(metric.score)
+                      <span
+                        className={`inline-flex min-w-[4.5rem] justify-center rounded-lg border px-2 py-0.5 font-mono text-sm font-semibold ${scoreTone(metric.score)}`}
+                      >
+                        {formatScore(metric.score)}
+                      </span>
                     )}
                   </td>
                   <td className="hidden px-4 py-3 text-xs text-ink-muted sm:table-cell">

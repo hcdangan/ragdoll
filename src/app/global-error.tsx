@@ -23,8 +23,10 @@ export default function GlobalError({
       <body
         style={{
           fontFamily: "system-ui, sans-serif",
-          background: "#f6f1e7",
-          color: "#082430",
+          // Inline palette values: this boundary renders before globals.css is
+          // guaranteed to be mounted, so the brand colours are inlined here.
+          background: "#fdf0df",
+          color: "#094454",
           display: "flex",
           minHeight: "100vh",
           alignItems: "center",

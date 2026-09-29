@@ -1,16 +1,47 @@
 import type { Config } from "tailwindcss";
 
 /**
- * The palette is sampled directly from the RAGdoll logo: deep teal navy for the
- * wordmark, the bright cyan of "doll", warm cream paper, and the orange status
- * dots. Colour values live as CSS variables in globals.css so the light and
- * dark themes swap without duplicating the ramp here.
+ * The palette is the six brand colours and nothing else: `#ffffff`, `#094454`,
+ * `#25a7e5`, `#fdf0df`, `#7aabb0`, `#fbae80`. Colour values live as CSS
+ * variables in globals.css, where the light and dark themes assign those six to
+ * different roles — see the header comment there for which pairs are legible.
  */
 const config: Config = {
   darkMode: "class",
   content: ["./src/**/*.{ts,tsx,mdx}"],
   theme: {
+    /**
+     * Tailwind's own defaults are greys, blacks and a blue ring. None of them are
+     * in this palette, and preflight applies several of them to elements that
+     * carry no colour class at all — so the defaults are replaced rather than
+     * left to leak into the compiled stylesheet.
+     */
+    borderColor: ({ theme }) => ({
+      ...theme("colors"),
+      DEFAULT: "rgb(var(--line) / <alpha-value>)",
+    }),
+    divideColor: ({ theme }) => ({
+      ...theme("colors"),
+      DEFAULT: "rgb(var(--line) / <alpha-value>)",
+    }),
+    placeholderColor: ({ theme }) => ({
+      ...theme("colors"),
+      DEFAULT: "rgb(var(--ink-subtle) / <alpha-value>)",
+    }),
     extend: {
+      /**
+       * The focus ring's default colour lives in Tailwind's ring plugin, which
+       * reads it from `ringColor.DEFAULT` — declared here (rather than beside the
+       * other defaults above) because the plugin resolves it through `extend`.
+       */
+      ringColor: ({ theme }) => ({
+        ...theme("colors"),
+        DEFAULT: "rgb(var(--cyan-500) / <alpha-value>)",
+      }),
+      ringOffsetColor: ({ theme }) => ({
+        ...theme("colors"),
+        DEFAULT: "rgb(var(--surface) / <alpha-value>)",
+      }),
       colors: {
         navy: {
           DEFAULT: "rgb(var(--navy) / <alpha-value>)",
@@ -64,6 +95,12 @@ const config: Config = {
           subtle: "rgb(var(--ink-subtle) / <alpha-value>)",
           inverted: "rgb(var(--ink-inverted) / <alpha-value>)",
         },
+        /** Strong neutral fill with its own legible ink. */
+        solid: {
+          DEFAULT: "rgb(var(--solid) / <alpha-value>)",
+          ink: "rgb(var(--solid-ink) / <alpha-value>)",
+        },
+        info: "rgb(var(--info) / <alpha-value>)",
         success: "rgb(var(--success) / <alpha-value>)",
         warning: "rgb(var(--warning) / <alpha-value>)",
         danger: "rgb(var(--danger) / <alpha-value>)",
@@ -79,14 +116,18 @@ const config: Config = {
         "3xl": "1.75rem",
       },
       boxShadow: {
-        card: "0 1px 2px rgb(var(--navy-900) / 0.06), 0 8px 24px -12px rgb(var(--navy-900) / 0.18)",
+        card: "0 1px 2px rgb(var(--shadow) / 0.06), 0 8px 24px -12px rgb(var(--shadow) / 0.18)",
         rail: "0 1px 0 rgb(var(--line) / 1)",
-        pop: "0 18px 40px -20px rgb(var(--navy-900) / 0.35)",
+        pop: "0 18px 40px -20px rgb(var(--shadow) / 0.35)",
+        // Tailwind's default elevations are pure black; re-tinted to the brand
+        // shadow colour, since the palette has no black in it.
+        sm: "0 1px 2px 0 rgb(var(--shadow) / 0.08)",
+        lg: "0 10px 22px -8px rgb(var(--shadow) / 0.28)",
       },
       backgroundImage: {
         "grid-fade":
-          "radial-gradient(circle at 1px 1px, rgb(var(--line-strong) / 0.45) 1px, transparent 0)",
-        "brand-sheen": "linear-gradient(135deg, rgb(var(--cyan-400)) 0%, rgb(var(--cyan-600)) 100%)",
+          "radial-gradient(circle at 1px 1px, rgb(var(--line-strong) / 0.35) 1px, transparent 0)",
+        "brand-sheen": "linear-gradient(135deg, rgb(var(--cyan-400)) 0%, rgb(var(--cyan-500)) 100%)",
       },
       keyframes: {
         "cat-bob": {

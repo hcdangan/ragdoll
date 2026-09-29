@@ -27,7 +27,7 @@ export function RouteError({
   }, [error]);
 
   return (
-    <div role="alert" className="card border-danger/40 bg-danger/5 p-6">
+    <div role="alert" className="card border-l-4 border-l-danger p-6">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 text-danger">
           <IconAlert width={22} height={22} />
@@ -60,17 +60,22 @@ export function InlineNotice({
   readonly children: ReactNode;
   readonly action?: ReactNode;
 }): ReactElement {
+  /**
+   * Tone is carried by a tinted surface, an accent edge and the icon — never by
+   * the text colour. On a light field only deep teal is dark enough to read, so
+   * a coloured sentence would be the unreadable thing it is meant to flag.
+   */
   const tones = {
-    info: "border-cyan-300/50 bg-cyan-50 text-cyan-700",
-    success: "border-success/40 bg-success/10 text-success",
-    warning: "border-warning/40 bg-warning/10 text-warning",
-    danger: "border-danger/40 bg-danger/10 text-danger",
+    info: "border-info bg-info/15",
+    success: "border-success bg-success/15",
+    warning: "border-warning bg-warning/25",
+    danger: "border-danger bg-danger text-ink-inverted",
   } as const;
 
   return (
     <div
       role={tone === "danger" ? "alert" : "status"}
-      className={`flex flex-col gap-2 rounded-xl border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${tones[tone]}`}
+      className={`flex flex-col gap-2 rounded-xl border border-l-4 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${tones[tone]}`}
     >
       <div>
         {title === undefined ? null : <p className="font-semibold">{title}</p>}

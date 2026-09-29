@@ -232,7 +232,7 @@ export function ChatPanel(): ReactElement {
         >
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-4 py-10 text-center">
-              <CatAvatar size={72} />
+              <CatAvatar size={96} />
               <div>
                 <h2 className="text-lg font-semibold">{t("chat.empty.title")}</h2>
                 <p className="mx-auto mt-1 max-w-md text-sm text-ink-muted">{t("chat.empty.body")}</p>
@@ -273,9 +273,9 @@ export function ChatPanel(): ReactElement {
 
         {contextWarning || contextFull ? (
           <div className="mt-3" role="alert">
-            <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
+            <div className="rounded-xl border border-warning bg-warning/25 px-4 py-3 text-sm text-ink">
               <p className="font-semibold">{t("chat.contextWarning.title")}</p>
-              <p className="mt-1 text-warning/90">
+              <p className="mt-1">
                 {t("chat.contextWarning.body", { tokens: maxInputTokens })}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -410,7 +410,7 @@ function ChatBubble({
 
   return (
     <div className="flex gap-3">
-      <CatAvatar size={34} thinking={thinking} className="mt-0.5" />
+      <CatAvatar size={40} thinking={thinking} className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
           {t("chat.assistant")}
@@ -435,7 +435,7 @@ function ChatBubble({
         </div>
 
         {fallback !== null ? (
-          <p className="field-hint mt-1 text-warning">
+          <p className="tone-warning mt-1 inline-block px-2 py-0.5 text-xs font-medium">
             {t(FALLBACK_NOTICE[fallback.reason ?? "unsupported"])}
           </p>
         ) : null}
@@ -498,7 +498,7 @@ function CitationPanel({
       </div>
 
       {fallbackReason !== null ? (
-        <p className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <p className="tone-warning mt-3 px-3 py-2 text-xs font-medium">
           {t(FALLBACK_NOTICE[fallbackReason])}
         </p>
       ) : null}

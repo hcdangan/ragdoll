@@ -47,7 +47,7 @@ export function SessionPill(): ReactElement {
   const sharedStore = snapshot?.capabilities.sharedStore ?? true;
 
   return (
-    <div className="hidden items-center gap-2 sm:flex">
+    <div className="hidden items-center gap-2 lg:flex">
       {sharedStore ? null : (
         <span className="badge-warn" title={t("session.noSharedStore")}>
           {t("status.noSharedStore")}
@@ -55,12 +55,15 @@ export function SessionPill(): ReactElement {
       )}
       <span className={hasPipeline ? "badge-brand" : "badge"}>
         <IconDatabase className="h-3.5 w-3.5" />
-        {hasPipeline
-          ? t("create.success", {
-              chunks: pipeline?.chunkCount ?? 0,
-              documents: pipeline?.documents.length ?? 0,
-            })
-          : t("session.pipelineMissing")}
+        {hasPipeline ? (
+          // Compact on purpose: the full sentence ("Pipeline ready — 3 chunks
+          // from 1 documents") is wide enough to wrap the navigation beside it.
+          <span className="whitespace-nowrap" title={t("session.pipelineReady")}>
+            {t("session.chunks", { count: pipeline?.chunkCount ?? 0 })}
+          </span>
+        ) : (
+          t("session.pipelineMissing")
+        )}
       </span>
       <span
         className={`badge font-mono text-[11px] ${expired ? "badge-danger" : ""}`}

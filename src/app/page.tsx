@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactElement } from "react";
 
-import { Wordmark } from "@/components/brand/logo";
+import { BRAND_CAT_SRC, Wordmark } from "@/components/brand/logo";
 import { IconChat, IconDatabase, IconGauge, IconSparkle, IconWand } from "@/components/ui/icons";
 import { t } from "@/lib/i18n";
 
@@ -60,8 +61,20 @@ export default function HomePage(): ReactElement {
           </div>
         </div>
 
-        <div className="card overflow-hidden bg-grid-fade p-6">
-          <Wordmark size="lg" withTagline />
+        <div className="card bg-grid-fade p-6">
+          <div className="flex items-center gap-4">
+            {/* The mark sits on its own white field, in both themes. */}
+            <span className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white p-1.5 shadow-card ring-1 ring-line">
+              <Image
+                src={BRAND_CAT_SRC}
+                alt=""
+                width={314}
+                height={306}
+                className="h-full w-full object-contain"
+              />
+            </span>
+            <Wordmark size="lg" withTagline />
+          </div>
           <p className="mt-5 text-sm leading-relaxed text-ink-muted">{t("app.description")}</p>
           <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
             <Stat title="Providers" value="4" />
@@ -81,7 +94,7 @@ export default function HomePage(): ReactElement {
             const Icon = feature.icon;
             return (
               <li key={feature.titleKey} className="card p-5">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-solid text-solid-ink">
                   <Icon width={20} height={20} />
                 </span>
                 <h3 className="mt-3 text-base font-semibold">
@@ -120,7 +133,7 @@ export default function HomePage(): ReactElement {
       <section className="grid gap-4 md:grid-cols-2">
         <div className="card p-5">
           <h2 className="flex items-center gap-2 text-base font-semibold">
-            <IconDatabase className="h-4 w-4 text-cyan-500" />
+            <IconDatabase className="h-4 w-4 text-ink" />
             {t("home.stack.title")}
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t("home.stack.body")}</p>
@@ -129,7 +142,7 @@ export default function HomePage(): ReactElement {
           <h2 className="text-base font-semibold">{t("home.license.title")}</h2>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t("home.license.body")}</p>
           <Link
-            className="mt-3 inline-flex text-sm font-semibold text-cyan-600 underline decoration-cyan-400/60 underline-offset-2 hover:text-cyan-500"
+            className="mt-3 inline-flex text-sm font-semibold text-ink underline decoration-cyan-500 decoration-2 underline-offset-2 hover:decoration-4"
             href="https://github.com/hcdangan/ragdoll/blob/main/LICENSE"
             rel="noreferrer noopener"
             target="_blank"

@@ -3,118 +3,181 @@
 @tailwind utilities;
 
 /*
- * Design tokens sampled from the RAGdoll logo.
- * The navy/cyan/cream ramps are semantic, not literal: in dark mode the low
- * numbers become the *darker* end of the ramp. Components therefore style
- * themselves with `bg-navy-900 text-cream-50` and stay correct in both themes.
+ * Brand palette — six colours, and nothing else.
+ *
+ *   #ffffff  white       surfaces, ink on solid fills
+ *   #094454  deep teal   every light-theme text colour, borders, dark surfaces
+ *   #25a7e5  brand blue  accents, focus rings, non-text highlights, fills
+ *   #fdf0df  cream       page field, muted panels
+ *   #7aabb0  muted teal  borders and dividers
+ *   #fbae80  peach       attention: warnings, destructive actions, failures
+ *
+ * Two rules keep text legible, because a six-colour palette has very few
+ * text-capable colours:
+ *
+ *  1. #094454 is the only colour dark enough to read on a light field
+ *     (10.7:1 on white, 9.0:1 on cream). It is therefore *all* light-theme
+ *     text, and hierarchy comes from size, weight and case rather than from a
+ *     lighter grey that would fail contrast.
+ *  2. #25a7e5 (2.7:1 on white) and #7aabb0 (2.5:1 on white) never carry text
+ *     on a light field. They are fills, borders and icons; anything that must
+ *     be read sits on white, cream or peach, or is reversed out of a deep-teal
+ *     fill.
+ *
+ * Semantic tones are drawn from the same six: info = muted teal, success =
+ * brand blue, warning = peach, danger = a solid fill.
  */
 :root {
   color-scheme: light;
 
-  --navy-50: 234 242 246;
-  --navy-100: 206 226 234;
-  --navy-200: 162 201 215;
-  --navy-300: 111 167 189;
-  --navy-400: 63 128 152;
-  --navy-500: 26 91 114;
-  --navy-600: 21 74 94;
-  --navy-700: 16 61 79;
-  --navy-800: 12 48 63;
-  --navy-900: 8 36 48;
-  --navy: var(--navy-900);
+  /* The palette, as channel triplets so Tailwind can apply alpha. */
+  --white: 255 255 255;
+  --deep: 9 68 84;
+  --blue: 37 167 229;
+  --cream: 253 240 223;
+  --muted: 122 171 176;
+  --peach: 251 174 128;
 
-  --cyan-50: 230 248 254;
-  --cyan-100: 204 238 252;
-  --cyan-200: 154 222 250;
-  --cyan-300: 94 189 242;
-  --cyan-400: 45 155 226;
-  --cyan-500: 26 123 209;
-  --cyan-600: 17 100 184;
-  --cyan-700: 12 79 148;
-  --cyan: var(--cyan-500);
+  /* Legacy ramp names, each pinned to one of the six. */
+  --navy: var(--deep);
+  --navy-50: var(--cream);
+  --navy-100: var(--cream);
+  --navy-200: var(--muted);
+  --navy-300: var(--muted);
+  --navy-400: var(--deep);
+  --navy-500: var(--deep);
+  --navy-600: var(--deep);
+  --navy-700: var(--deep);
+  --navy-800: var(--deep);
+  --navy-900: var(--deep);
 
-  --cream-50: 251 248 242;
-  --cream-100: 246 241 231;
-  --cream-200: 238 230 214;
-  --cream-300: 226 215 195;
-  --cream: var(--cream-50);
+  --cyan: var(--blue);
+  --cyan-50: var(--cream);
+  --cyan-100: var(--cream);
+  --cyan-200: var(--muted);
+  --cyan-300: var(--muted);
+  --cyan-400: var(--blue);
+  --cyan-500: var(--blue);
+  --cyan-600: var(--deep);
+  --cyan-700: var(--deep);
 
-  --ember-400: 248 176 96;
-  --ember-500: 240 138 50;
-  --ember-600: 214 108 24;
-  --ember: var(--ember-500);
+  --cream-50: var(--white);
+  --cream-100: var(--cream);
+  --cream-200: var(--muted);
+  --cream-300: var(--muted);
 
-  --surface: 255 255 255;
-  --surface-muted: 246 243 236;
-  --surface-raised: 255 255 255;
+  --ember: var(--peach);
+  --ember-400: var(--peach);
+  --ember-500: var(--peach);
+  --ember-600: var(--peach);
 
-  --line: 222 232 236;
-  --line-strong: 186 205 212;
+  --surface: var(--white);
+  --surface-muted: var(--cream);
+  --surface-raised: var(--white);
 
-  --ink: 8 36 48;
-  --ink-muted: 58 86 99;
-  --ink-subtle: 108 130 141;
-  --ink-inverted: 250 250 247;
+  --line: var(--muted);
+  --line-strong: var(--deep);
 
-  --success: 22 132 96;
-  --warning: 197 122 16;
-  --danger: 198 58 58;
+  --ink: var(--deep);
+  --ink-muted: var(--deep);
+  --ink-subtle: var(--deep);
+  --ink-inverted: var(--white);
+
+  /* The strong neutral fill: buttons, active nav, user bubbles, step numbers. */
+  --solid: var(--deep);
+  --solid-ink: var(--white);
+
+  /* Tones. `danger` is a fill, so it can be reversed out legibly. */
+  --info: var(--muted);
+  --success: var(--blue);
+  --warning: var(--peach);
+  --danger: var(--deep);
+
+  --shadow: var(--deep);
 
   --radius-control: 0.75rem;
 }
 
+/*
+ * Dark theme is the same six colours with the roles swapped: deep teal becomes
+ * the field, cream becomes the ink. Brand blue still only ever fills or
+ * outlines — it is 4.0:1 on deep teal, which is fine for an icon and not for a
+ * sentence.
+ */
 .dark {
   color-scheme: dark;
 
-  --navy-50: 8 36 48;
-  --navy-100: 12 48 63;
-  --navy-200: 16 61 79;
-  --navy-300: 21 74 94;
-  --navy-400: 30 96 118;
-  --navy-500: 63 128 152;
-  --navy-600: 111 167 189;
-  --navy-700: 162 201 215;
-  --navy-800: 206 226 234;
-  --navy-900: 234 242 246;
+  --navy-50: var(--deep);
+  --navy-100: var(--deep);
+  --navy-200: var(--muted);
+  --navy-300: var(--muted);
+  --navy-400: var(--muted);
+  --navy-500: var(--muted);
+  --navy-600: var(--cream);
+  --navy-700: var(--cream);
+  --navy-800: var(--cream);
+  --navy-900: var(--cream);
 
-  --cyan-50: 10 38 52;
-  --cyan-100: 12 51 70;
-  --cyan-200: 14 68 94;
-  --cyan-300: 20 96 130;
-  --cyan-400: 45 155 226;
-  --cyan-500: 84 183 242;
-  --cyan-600: 133 208 248;
-  --cyan-700: 178 226 251;
+  --cyan-50: var(--deep);
+  --cyan-100: var(--deep);
+  --cyan-200: var(--muted);
+  --cyan-300: var(--muted);
+  --cyan-400: var(--blue);
+  --cyan-500: var(--blue);
+  --cyan-600: var(--cream);
+  --cyan-700: var(--cream);
 
-  --cream-50: 246 250 251;
-  --cream-100: 226 238 242;
-  --cream-200: 186 205 212;
-  --cream-300: 132 158 168;
+  --cream-50: var(--deep);
+  --cream-100: var(--deep);
+  --cream-200: var(--muted);
+  --cream-300: var(--muted);
 
-  --ember-400: 248 176 96;
-  --ember-500: 250 160 74;
-  --ember-600: 252 196 130;
+  --surface: var(--deep);
+  --surface-muted: var(--deep);
+  --surface-raised: var(--deep);
 
-  --surface: 9 23 31;
-  --surface-muted: 14 32 42;
-  --surface-raised: 19 41 52;
+  --line: var(--muted);
+  --line-strong: var(--cream);
 
-  --line: 30 56 68;
-  --line-strong: 47 80 95;
+  --ink: var(--cream);
+  --ink-muted: var(--cream);
+  --ink-subtle: var(--cream);
+  --ink-inverted: var(--deep);
 
-  --ink: 240 247 249;
-  --ink-muted: 178 199 208;
-  --ink-subtle: 138 163 174;
-  --ink-inverted: 6 22 30;
+  --solid: var(--cream);
+  --solid-ink: var(--deep);
 
-  --success: 61 190 142;
-  --warning: 233 168 62;
-  --danger: 240 122 122;
+  --info: var(--muted);
+  --success: var(--blue);
+  --warning: var(--peach);
+  --danger: var(--peach);
+
+  --shadow: var(--deep);
 }
 
 @layer base {
   * {
     @apply border-line;
+  }
+
+  /*
+   * Tailwind's preflight fills two defaults with colours outside this palette:
+   * placeholders are gray-400 and the ring plugin's fallback is blue-300. Both
+   * are re-pointed here so no third-party colour can reach the page from an
+   * element that sets no colour class of its own. Every `ring-*` utility still
+   * overrides the ring colour it needs.
+   */
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-ink-subtle;
+    opacity: 1;
+  }
+
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    --tw-ring-color: rgb(var(--cyan-500) / 0.5);
   }
 
   html {
@@ -132,7 +195,7 @@
   }
 
   ::selection {
-    @apply bg-cyan-200 text-navy-900;
+    @apply bg-cyan-500 text-white;
   }
 
   h1,
@@ -163,7 +226,7 @@
   }
 
   .section-title {
-    @apply text-sm font-semibold uppercase tracking-[0.14em] text-ink-subtle;
+    @apply text-sm font-semibold uppercase tracking-[0.14em] text-ink;
   }
 
   .field-label {
@@ -171,18 +234,23 @@
   }
 
   .field-hint {
-    @apply text-xs leading-relaxed text-ink-subtle;
+    @apply text-xs leading-relaxed text-ink;
   }
 
+  /*
+   * Errors are a peach chip rather than red text: the palette has no red, and
+   * peach is the only colour here that carries dark text at 5.9:1 while still
+   * reading as "something needs attention".
+   */
   .field-error {
-    @apply flex items-start gap-2 text-xs font-medium text-danger;
+    @apply inline-flex items-start gap-2 rounded-lg bg-warning/25 px-2 py-1 text-xs font-semibold text-ink;
   }
 
   .input {
     @apply w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink
       shadow-sm transition-colors duration-150 placeholder:text-ink-subtle
       hover:border-line-strong focus:border-cyan-500 disabled:cursor-not-allowed
-      disabled:bg-surface-muted disabled:text-ink-subtle;
+      disabled:bg-surface-muted disabled:text-ink-subtle disabled:opacity-60;
   }
 
   .input-mono {
@@ -195,9 +263,10 @@
       ease-brand disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  /* Solid deep teal with white text: the one button pair that always clears AA. */
   .btn-primary {
-    @apply btn bg-cyan-500 text-white shadow-card hover:bg-cyan-600 active:translate-y-px
-      disabled:hover:bg-cyan-500;
+    @apply btn bg-solid text-solid-ink shadow-card hover:shadow-pop active:translate-y-px
+      disabled:hover:shadow-card;
   }
 
   .btn-secondary {
@@ -206,41 +275,58 @@
   }
 
   .btn-ghost {
-    @apply btn text-ink-muted hover:bg-surface-muted hover:text-ink;
+    @apply btn text-ink hover:bg-surface-muted;
   }
 
   .btn-danger {
-    @apply btn border border-danger/40 bg-danger/10 text-danger hover:bg-danger/20;
+    @apply btn border border-warning bg-warning/25 text-ink hover:bg-warning/40;
   }
 
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full border border-line bg-surface-muted
-      px-2.5 py-0.5 text-xs font-medium text-ink-muted;
+    @apply inline-flex items-center gap-1 rounded-full border border-line bg-surface
+      px-2.5 py-0.5 text-xs font-medium text-ink;
   }
 
   .badge-brand {
-    @apply badge border-cyan-300/60 bg-cyan-100 text-cyan-700;
+    @apply badge border-solid bg-solid text-solid-ink;
   }
 
   .badge-warn {
-    @apply badge border-warning/40 bg-warning/10 text-warning;
+    @apply badge border-warning bg-warning/25 text-ink;
   }
 
   .badge-danger {
-    @apply badge border-danger/40 bg-danger/10 text-danger;
+    @apply badge border-danger bg-danger text-ink-inverted;
+  }
+
+  /* Tone surfaces, used for notices, score chips and inline status text. */
+  .tone-info {
+    @apply rounded-lg border border-info bg-info/20 text-ink;
+  }
+
+  .tone-success {
+    @apply rounded-lg border border-success bg-success/20 text-ink;
+  }
+
+  .tone-warning {
+    @apply rounded-lg border border-warning bg-warning/25 text-ink;
+  }
+
+  .tone-danger {
+    @apply rounded-lg border border-danger bg-danger text-ink-inverted;
   }
 
   .nav-link {
-    @apply relative inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium
-      text-ink-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink;
+    @apply relative inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium
+      text-ink transition-colors duration-150 hover:bg-surface-muted;
   }
 
   .nav-link-active {
-    @apply bg-cyan-100 text-cyan-700 hover:bg-cyan-100 hover:text-cyan-700;
+    @apply bg-solid text-solid-ink hover:bg-solid;
   }
 
   .nav-link-disabled {
-    @apply cursor-not-allowed text-ink-subtle opacity-60 hover:bg-transparent hover:text-ink-subtle;
+    @apply cursor-not-allowed opacity-60 hover:bg-transparent;
   }
 
   .slider {
@@ -248,6 +334,7 @@
       accent-cyan-500 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  /* Deep teal track, brand-blue thumb: both non-text, so both may use the blue. */
   .slider::-webkit-slider-thumb {
     @apply h-4 w-4 appearance-none rounded-full border-2 border-surface bg-cyan-500
       shadow-sm transition-transform duration-150 hover:scale-110;
@@ -262,8 +349,8 @@
   }
 
   .citation-chip {
-    @apply inline-flex max-w-full items-center gap-1.5 truncate rounded-lg border border-cyan-300/50
-      bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700;
+    @apply inline-flex max-w-full items-center gap-1.5 truncate rounded-lg border border-cyan-500
+      bg-surface px-2 py-1 text-xs font-medium text-ink;
   }
 }
 

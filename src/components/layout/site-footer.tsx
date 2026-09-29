@@ -14,7 +14,7 @@ export function SiteFooter(): ReactElement {
         <p className="text-ink-subtle">
           {t("home.license.title")} · MIT · © 2026 Harley Dangan ·{" "}
           <Link
-            className="font-medium text-cyan-600 underline decoration-cyan-400/60 underline-offset-2 hover:text-cyan-500"
+            className="font-medium text-ink underline decoration-cyan-500 decoration-2 underline-offset-2 hover:decoration-4"
             href="https://github.com/hcdangan/ragdoll/blob/main/LICENSE"
             rel="noreferrer noopener"
             target="_blank"

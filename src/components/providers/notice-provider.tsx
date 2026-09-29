@@ -125,11 +125,42 @@ export const useNotices = (): NoticeApi => {
   return api;
 };
 
-const TONE_ACCENT: Readonly<Record<NoticeTone, string>> = {
-  info: "border-l-cyan-500 text-cyan-700",
-  success: "border-l-success text-success",
-  warning: "border-l-warning text-warning",
-  danger: "border-l-danger text-danger",
+/**
+ * Tone styling.
+ *
+ * Colour never carries the message: on a light field only deep teal is dark
+ * enough to read, so an "error red" sentence would be exactly the unreadable text
+ * it is meant to flag. Tone is a tinted surface plus an accent edge and icon,
+ * except for danger, which is reversed out of a solid fill so a failure is
+ * unmistakable even in a screenshot.
+ */
+interface ToneStyle {
+  readonly card: string;
+  readonly icon: string;
+  readonly close: string;
+}
+
+const TONE_STYLE: Readonly<Record<NoticeTone, ToneStyle>> = {
+  info: {
+    card: "border-line border-l-info bg-surface text-ink",
+    icon: "text-ink",
+    close: "btn-ghost text-ink",
+  },
+  success: {
+    card: "border-line border-l-success bg-surface text-ink",
+    icon: "text-ink",
+    close: "btn-ghost text-ink",
+  },
+  warning: {
+    card: "border-warning border-l-warning bg-warning/25 text-ink",
+    icon: "text-ink",
+    close: "btn-ghost text-ink",
+  },
+  danger: {
+    card: "border-danger border-l-danger bg-danger text-ink-inverted",
+    icon: "text-ink-inverted",
+    close: "btn text-ink-inverted px-2 py-1",
+  },
 };
 
 const TONE_ICON: Readonly<Record<NoticeTone, ReactElement>> = {
@@ -170,24 +201,23 @@ function NoticeCard({
   readonly notice: Notice;
   readonly onDismiss: (id: number) => void;
 }): ReactElement {
+  const tone = TONE_STYLE[notice.tone];
   return (
     <div
       // A danger notice is announced immediately; everything else waits its turn,
       // so a success message never interrupts a screen-reader user mid-sentence.
       role={notice.tone === "danger" ? "alert" : "status"}
-      className={`pointer-events-auto flex items-start gap-3 rounded-xl border border-l-4 border-line bg-surface px-4 py-3 text-sm shadow-lg ${TONE_ACCENT[notice.tone]}`}
+      className={`pointer-events-auto flex items-start gap-3 rounded-xl border border-l-4 px-4 py-3 text-sm shadow-lg ${tone.card}`}
     >
-      <span className="mt-0.5 shrink-0">{TONE_ICON[notice.tone]}</span>
+      <span className={`mt-0.5 shrink-0 ${tone.icon}`}>{TONE_ICON[notice.tone]}</span>
       <div className="min-w-0 flex-1">
-        {notice.title === undefined ? null : (
-          <p className="font-semibold text-ink">{notice.title}</p>
-        )}
-        <p className="break-words text-ink-muted">{notice.message}</p>
+        {notice.title === undefined ? null : <p className="font-semibold">{notice.title}</p>}
+        <p className="break-words">{notice.message}</p>
         {notice.action === undefined ? null : <div className="mt-2">{notice.action}</div>}
       </div>
       <button
         type="button"
-        className="btn-ghost -mr-2 -mt-1 shrink-0 px-2 py-1"
+        className={`${tone.close} -mr-2 -mt-1 shrink-0`}
         aria-label={t("notice.dismiss")}
         onClick={() => {
           onDismiss(notice.id);
