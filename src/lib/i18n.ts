@@ -163,6 +163,8 @@ const en = {
   "create.testOk": "Connected to {model} — embeddings {dimensions}d in {latency} ms.",
   "create.success": "Pipeline ready — {chunks} chunks from {documents} documents.",
   "create.successNoDocs": "Pipeline ready. No documents indexed yet.",
+  "create.noTextNotice":
+    "The pipeline was created, but no text could be extracted from your PDFs, so nothing was indexed — chat will only ever reply that it does not know. Upload a PDF whose text can be selected (not a scan) and create the pipeline again.",
   "create.clear": "Clear RAG pipeline",
   "create.pipelineExists": "A pipeline already exists. Creating again replaces it.",
   "create.validationFix": "Fix the highlighted fields and try again.",
@@ -221,6 +223,8 @@ const en = {
   "chat.empty.suggestion3": "List the recommendations.",
   "chat.error": "The response failed: {message}",
   "chat.retry": "Try again",
+  "chat.noTextWarning":
+    "No text could be extracted from your PDFs, so nothing was indexed and every answer will be the fallback. Upload a PDF whose text can be selected (not a scan) and create the pipeline again.",
   "chat.fallbackNotice": "The answer failed the groundedness check and was withheld.",
   "chat.declinedNotice": "Your documents don't appear to contain the answer to that.",
   "chat.noMatchNotice": "No matching passage was found in your documents for that question.",

@@ -248,6 +248,14 @@ export function RagCreationForm(): ReactElement {
         notify({ tone: "danger", message: result.error.message });
         return;
       }
+      // A pipeline built over PDFs that yielded no text is created successfully and
+      // then cannot answer anything, which reads as a broken chatbot. Say so here,
+      // where the uploads are still on screen.
+      if (documents.length > 0 && result.data.chunkCount === 0) {
+        notify({ tone: "warning", message: t("create.noTextNotice") });
+        refetch();
+        return;
+      }
       notify({
         tone: "success",
         message:

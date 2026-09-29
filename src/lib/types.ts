@@ -194,6 +194,16 @@ export interface EvaluationReport {
   readonly durationMs: number;
   readonly sampleCount: number;
   readonly documentCount: number;
+  /**
+   * Why the run produced no scores, when that happened.
+   *
+   * A report whose eight metrics are all `"N/A"` is indistinguishable from a
+   * broken button, so the runner states the reason rather than leaving the user to
+   * guess. Absent when every sample scored.
+   */
+  readonly note?: string;
+  /** Samples that failed before scoring; excluded from every average. */
+  readonly failedSamples?: number;
   readonly metrics: readonly MetricResult[];
   readonly samples: readonly EvaluationSample[];
 }

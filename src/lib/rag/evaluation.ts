@@ -37,8 +37,7 @@ import { ownedChunks, type EngineSession } from "./store";
  * every judge is allowed to fail without failing the report.
  */
 
-/** Samples per run when the caller does not choose; four fits the 300s budget. */
-export const DEFAULT_SAMPLE_SIZE = 4;
+/** Samples per run when the caller does not choose; four fits the 300s budget. */export const DEFAULT_SAMPLE_SIZE = 4;
 
 /** Hard ceiling on samples, so a client cannot ask for an unbounded run. */
 export const MAX_SAMPLE_SIZE = 12;
@@ -70,9 +69,46 @@ export function sampleChunks(owned: readonly OwnedChunk[], count: number): Owned
   return picked;
 }
 
+/**
+ * Explains an evaluation that produced little or nothing.
+ *
+ * Every failure below used to be invisible: a run whose samples could not be
+ * scored returned eight `"N/A"` metrics and no samples, which looks exactly like a
+ * dead button. The reason is cheap to compute and is the difference between "your
+ * PDF has no selectable text" and "this feature is broken".
+ *
+ * @param input Chunk, sample and failure counts for the run.
+ * @returns The sentence to surface, or null when the run scored normally.
+ */
+export function buildEvaluationNote(input: {
+  readonly chunkCount: number;
+  readonly sampled: number;
+  readonly judged: number;
+  readonly failures: number;
+  readonly firstFailure: string;
+}): string | null {
+  if (input.chunkCount === 0) {
+    return (
+      "The index holds no text chunks, so there was nothing to sample." +
+      " Re-upload a PDF whose text can be selected, then rebuild the pipeline."
+    );
+  }
+  if (input.sampled > 0 && input.judged === 0) {
+    return input.firstFailure.length > 0
+      ? `None of the ${input.sampled} sampled questions could be scored: ${input.firstFailure}`
+      : `None of the ${input.sampled} sampled questions could be scored.`;
+  }
+  if (input.failures > 0) {
+    return (
+      `${input.failures} of ${input.sampled} sampled questions could not be scored and are ` +
+      `excluded from the averages${input.firstFailure.length > 0 ? `: ${input.firstFailure}` : "."}`
+    );
+  }
+  return null;
+}
+
 /** One provider call that may fail without failing the run. */
-async function ask(provider: LlmProvider, messages: ChatMessage[], maxTokens: number): Promise<string> {
-  try {
+async function ask(provider: LlmProvider, messages: ChatMessage[], maxTokens: number): Promise<string> {  try {
     const completion = await provider.complete(messages, { temperature: 0, maxTokens });
     return completion.text.trim();
   } catch (error) {
@@ -198,6 +234,8 @@ export async function runEvaluation(
 
   const scores: Partial<Record<EvaluationMetric, number[]>> = {};
   const judged: EvaluationSample[] = [];
+  let failures = 0;
+  let firstFailure = "";
 
   for (const sample of samples) {
     // A question the passage answers completely, so a low score means the pipeline
@@ -218,10 +256,22 @@ export async function runEvaluation(
         scores[metric] = [...(scores[metric] ?? []), ...values];
       }
     } catch (error) {
-      // One unanswerable sample must not discard a run that already spent money.
+      // One unanswerable sample must not discard a run that already spent money —
+      // but it must not vanish either, so the count reaches the report's note.
+      failures += 1;
+      firstFailure =
+        firstFailure.length > 0 ? firstFailure : error instanceof Error ? error.message : String(error);
       console.warn(`[ragdoll] evaluation sample failed: ${String(error)}`);
     }
   }
+
+  const note = buildEvaluationNote({
+    chunkCount: owned.length,
+    sampled: samples.length,
+    judged: judged.length,
+    failures,
+    firstFailure,
+  });
 
   return {
     category: "Retrieval Augmented Generation",
@@ -229,6 +279,8 @@ export async function runEvaluation(
     durationMs: Date.now() - started,
     sampleCount: judged.length,
     documentCount: session.documents.length,
+    ...(note === null ? {} : { note }),
+    ...(failures === 0 ? {} : { failedSamples: failures }),
     metrics: assembleMetrics(scores, { multimodal: session.multimodal }),
     samples: judged,
   };

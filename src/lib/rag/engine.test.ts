@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DevProvider } from "@/lib/rag/dev-provider";
+import { buildEvaluationNote, runEvaluation } from "@/lib/rag/evaluation";
 import { FALLBACK_ANSWER, GROUNDEDNESS_SYSTEM_PROMPT, SYSTEM_PROMPT } from "@/lib/rag/prompts";
 import {
   answer,
@@ -421,8 +422,72 @@ describe("faithfulness", () => {
   });
 });
 
-describe("session history", () => {
-  it("records turns and clears only the transcript", async () => {
+/**
+ * Every metric reading `"N/A"` used to be indistinguishable from a dead button.
+ * These cases pin the explanation that now comes with it.
+ */
+describe("buildEvaluationNote", () => {
+  const base = { chunkCount: 3, sampled: 2, judged: 2, failures: 0, firstFailure: "" };
+
+  it("says nothing when the run scored normally", () => {
+    expect(buildEvaluationNote(base)).toBeNull();
+  });
+
+  it("blames an empty index, and says what to do about it", () => {
+    const note = buildEvaluationNote({ ...base, chunkCount: 0, sampled: 0, judged: 0 });
+    expect(note).toContain("no text chunks");
+    expect(note).toContain("Re-upload a PDF whose text can be selected");
+  });
+
+  it("reports the provider failure when no sample could be scored", () => {
+    const note = buildEvaluationNote({
+      ...base,
+      judged: 0,
+      failures: 2,
+      firstFailure: "The provider at … returned HTTP 429.",
+    });
+    expect(note).toContain("None of the 2 sampled questions could be scored");
+    expect(note).toContain("HTTP 429");
+  });
+
+  it("reports partial failures without hiding the averages that did compute", () => {
+    const note = buildEvaluationNote({ ...base, judged: 1, failures: 1, firstFailure: "boom" });
+    expect(note).toContain("1 of 2 sampled questions could not be scored");
+    expect(note).toContain("boom");
+  });
+});
+
+describe("runEvaluation over an index with no text", () => {
+  it("returns every metric as N/A and explains why", async () => {
+    // A page with no text object at all: parses, chunks to nothing, indexes nothing.
+    const blank = buildRequest();
+    const request = {
+      ...blank,
+      sessionId: "session-blank-index",
+      documents: [
+        {
+          id: "doc-blank",
+          name: "scan.pdf",
+          sizeBytes: 500,
+          pageCount: 1,
+          base64: Buffer.from(buildPdf([""])).toString("base64"),
+        },
+      ],
+    };
+
+    const index = await ensureIndex(request);
+    expect(index.chunkCount).toBe(0);
+
+    const report = await runEvaluation(request, { sampleCount: 2 });
+
+    expect(report.sampleCount).toBe(0);
+    expect(report.samples).toHaveLength(0);
+    expect(report.note).toContain("no text chunks");
+    expect(report.metrics.every((metric) => metric.score === "N/A")).toBe(true);
+  });
+});
+
+describe("session history", () => {  it("records turns and clears only the transcript", async () => {
     const request = buildRequest();
     await ensureIndex(request);
     recordTurn(request.sessionId, "a question", "an answer", [], false);

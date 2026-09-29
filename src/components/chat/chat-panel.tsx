@@ -146,6 +146,8 @@ export function ChatPanel(): ReactElement {
 
   const busy = status === "streaming" || status === "submitted";
   const maxInputTokens = pipeline?.config.maxInputTokens ?? 1024;
+  const noTextIndexed =
+    hasPipeline && (pipeline?.documents.length ?? 0) > 0 && (pipeline?.chunkCount ?? 0) === 0;
 
   // The context window is a client-side budget: the browser knows the transcript
   // length, and the engine only ever sees the trimmed history. Warning before the
@@ -359,6 +361,14 @@ export function ChatPanel(): ReactElement {
             </button>
           )}
         </form>
+        {/* A pipeline built over PDFs with no extractable text answers "I don't
+            know" to everything. Without this line that is indistinguishable from
+            a broken chatbot. */}
+        {noTextIndexed ? (
+          <p className="tone-warning mt-2 px-3 py-2 text-xs font-medium">
+            {t("chat.noTextWarning")}
+          </p>
+        ) : null}
         <p id="chat-input-hint" className="field-hint mt-2">
           {hasPipeline
             ? t("session.chunks", { count: pipeline?.chunkCount ?? 0 })

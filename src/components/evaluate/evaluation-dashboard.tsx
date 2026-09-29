@@ -193,6 +193,10 @@ export function EvaluationDashboard(): ReactElement {
         ) : null}
       </div>
 
+      {report?.note === undefined ? null : (
+        <p className="tone-warning px-4 py-3 text-sm font-medium">{report.note}</p>
+      )}
+
       <div className="card overflow-hidden">
         <table className="w-full text-left text-sm">
           <caption className="sr-only">{t("evaluate.category")}</caption>
