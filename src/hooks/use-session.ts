@@ -36,7 +36,6 @@ export interface SessionView {
   readonly hasPipeline: boolean;
   readonly canChat: boolean;
   readonly canEvaluate: boolean;
-  readonly engineConfigured: boolean;
   readonly maskedKey: string | null;
   readonly expiresAt: number | null;
   readonly refetch: () => void;
@@ -71,7 +70,6 @@ export const useSession = (): SessionView => {
     hasPipeline: snapshot?.pipeline !== null && snapshot?.pipeline !== undefined,
     canChat: snapshot?.capabilities.chat === true,
     canEvaluate: snapshot?.capabilities.evaluate === true,
-    engineConfigured: snapshot?.capabilities.engine === true,
     maskedKey: snapshot?.provider?.maskedKey ?? null,
     expiresAt: snapshot === undefined ? null : Date.now() + snapshot.ttlMs,
     refetch: refresh,

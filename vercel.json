@@ -1,16 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
+  "outputDirectory": ".next",
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm build",
   "regions": ["sin1"],
-  "rewrites": [{ "source": "/engine/(.*)", "destination": "/api/index" }],
-  "functions": {
-    "api/index.py": {
-      "memory": 1024,
-      "maxDuration": 300
-    }
-  },
   "headers": [
     {
       "source": "/brand/(.*)",

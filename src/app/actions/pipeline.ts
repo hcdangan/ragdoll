@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 
 import { appError, fail, ok, type ActionResult } from "@/lib/errors";
 import { getServerEnv } from "@/lib/env";
-import { requireEngine } from "@/lib/pipeline/engine";
+import { toAppError } from "@/lib/pipeline/engine-errors";
 import { enginePayload, toPipelineSummary } from "@/lib/pipeline/session-helpers";
+import { enforceUploadBudget } from "@/lib/rag/pdf";
+import { clearHistory, ensureIndex, reset, testConnection } from "@/lib/rag/service";
 import { LIMITS } from "@/lib/rules";
 import {
   adoptSession,
@@ -28,6 +30,11 @@ import {
  * rule every action follows: validate on the server, mutate the session, and
  * return a discriminated result — never throw across the boundary, because a
  * thrown action error becomes an opaque 500 in the browser.
+ *
+ * These actions call the RAG pipeline directly: it is a module inside this same
+ * Next.js runtime, not a second service, so there is no URL to configure and no
+ * HTTP boundary to translate errors across. `toAppError` is what keeps the error
+ * vocabulary the UI already understands intact across that change.
  */
 
 export interface CreatePipelineData {
@@ -60,16 +67,6 @@ export async function createPipelineAction(
   const started = Date.now();
   try {
     const env = getServerEnv();
-    if (env.engineUrl.length === 0) {
-      return fail(
-        appError("engine_error", undefined, {
-          cause: new Error(
-            "No RAG engine is configured. Set RAGDOLL_API_URL to the FastAPI service.",
-          ),
-        }),
-      );
-    }
-
     const { config, errors } = validatePipelineForm(input, { hosted: env.hosted });
     if (config === null) {
       return fail(
@@ -81,14 +78,14 @@ export async function createPipelineAction(
 
     const session = await requireSession();
     const documents: UploadedDocument[] = toUploadedDocuments(input.documents ?? []);
+    enforceUploadBudget(documents.map((document) => document.bytes.byteLength));
 
     const engineSession = { ...session, pipeline: config, documents };
-    const engine = await requireEngine();
     const payload = enginePayload(engineSession, input.apiKey ?? "");
 
     // Test first: a bad key must fail before any embedding spend.
-    await engine.testConnection(payload);
-    const upsert = await engine.ensureIndex(payload);
+    await testConnection(payload);
+    const upsert = await ensureIndex(payload);
 
     const summaries = upsert.documents;
     const withMetadata = documents.map((document) => {
@@ -103,7 +100,6 @@ export async function createPipelineAction(
 
     const updated = stampSession({
       ...session,
-      engineSessionId: upsert.engineSessionId,
       pipeline: config,
       documents: withMetadata,
       chat: [],
@@ -131,7 +127,7 @@ export async function createPipelineAction(
       latencyMs: Date.now() - started,
     });
   } catch (error) {
-    return fail(error);
+    return fail(toAppError(error));
   }
 }
 
@@ -159,8 +155,7 @@ export async function testConnectionAction(
     }
 
     const session = await requireSession();
-    const engine = await requireEngine();
-    const probe = await engine.testConnection(
+    const probe = await testConnection(
       enginePayload({ ...session, pipeline: config, documents: [] }, input.apiKey ?? ""),
     );
     return ok({
@@ -171,7 +166,7 @@ export async function testConnectionAction(
       embeddingProbe: probe.embeddingProbe,
     });
   } catch (error) {
-    return fail(error);
+    return fail(toAppError(error));
   }
 }
 
@@ -179,8 +174,7 @@ export async function testConnectionAction(
 export async function clearPipelineAction(): Promise<ActionResult<{ readonly cleared: true }>> {
   try {
     const session = await requireSession();
-    const engine = await requireEngine();
-    await engine.reset(session.id).catch(() => undefined);
+    reset(session.id);
     await destroySession(session.id);
 
     revalidatePath("/create");
@@ -189,7 +183,7 @@ export async function clearPipelineAction(): Promise<ActionResult<{ readonly cle
     revalidatePath("/");
     return ok({ cleared: true } as const);
   } catch (error) {
-    return fail(error);
+    return fail(toAppError(error));
   }
 }
 
@@ -197,12 +191,13 @@ export async function clearPipelineAction(): Promise<ActionResult<{ readonly cle
 export async function resetChatAction(): Promise<ActionResult<{ readonly turns: number }>> {
   try {
     const session = await requireSession();
+    clearHistory(session.id);
     const cleared = stampSession({ ...session, chat: [] });
     await saveSession(cleared);
     revalidatePath("/chat");
     return ok({ turns: session.chat.length });
   } catch (error) {
-    return fail(error);
+    return fail(toAppError(error));
   }
 }
 
@@ -213,6 +208,6 @@ export async function keepAliveAction(): Promise<ActionResult<{ readonly ttlMs: 
     await saveSession(stampSession(session));
     return ok({ ttlMs: LIMITS.sessionTtlMs });
   } catch (error) {
-    return fail(error);
+    return fail(toAppError(error));
   }
 }

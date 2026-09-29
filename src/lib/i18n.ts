@@ -76,7 +76,7 @@ const en = {
     "Chat retrieves the top-K chunks, injects them as a tagged context block, and answers with page-level citations.",
   "home.stack.title": "Built with",
   "home.stack.body":
-    "Next.js 15 App Router and React 19 on the front end, TanStack Query for server state, a FastAPI engine for retrieval and evaluation, and the Vercel AI SDK for streaming.",
+    "Next.js 15 App Router and React 19 on the front end, TanStack Query for server state, a TypeScript retrieval and evaluation engine running inside the Next.js server, and the Vercel AI SDK for streaming.",
   "home.license.title": "License",
   "home.license.body":
     "RAGdoll is released under the MIT License. Copyright (c) 2026 Harley Dangan. Submitted as a mini project to the Asian Institute of Management.",
@@ -248,7 +248,6 @@ const en = {
   "status.queued": "Queued",
   "status.skipped": "Skipped",
   "status.failed": "Failed",
-  "status.engineMissing": "Engine not configured",
   "status.noSharedStore": "No shared store",
 
   "error.generic": "Something went wrong. Try again.",
@@ -256,7 +255,7 @@ const en = {
   "error.unauthorized": "That request was not authorised. Refresh the page and try again.",
   "error.boundary.title": "This section failed to load",
   "error.boundary.body": "The error was contained so the rest of the app keeps working.",
-  "error.network": "Cannot reach the RAG engine. Check your connection and retry.",
+  "error.network": "Cannot reach the server. Check your connection and retry.",
   "error.timeout": "The request timed out. Try again.",
   "error.invalidInput": "That input is not valid.",
   "error.guardrail.jailbreak":

@@ -37,7 +37,9 @@ export default defineConfig({
         timeout: 180_000,
         env: {
           RAGDOLL_SESSION_SECRET: "playwright-session-secret-value-0123456789",
-          RAGDOLL_API_TOKEN: "playwright-engine-token-0123456789",
+          // The offline provider answers deterministically, so the journey covers
+          // the real session, action and streaming code without a paid API key.
+          RAGDOLL_DEV_PROVIDER: "1",
         },
       },
 });

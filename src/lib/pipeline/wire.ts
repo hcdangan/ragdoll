@@ -1,19 +1,28 @@
-import type { EngineDocumentInput, EngineSessionInput } from "./engine-contract";
+import type { EngineRequest } from "../rag/service";
 import type { SessionState } from "../types";
 
 /**
- * Converts session state into the engine wire format. Split out from the client
- * so the mapping is unit-testable without a network stub.
+ * Converts session state into the engine request the in-process service consumes.
+ *
+ * Split out from the callers so the mapping is unit-testable without a provider
+ * stub. The base64 hop is deliberate rather than incidental: it is the shape the
+ * session store persists, so an index rebuilt on a cold instance is fed exactly
+ * the bytes the user uploaded.
  */
 
-export const bytesToBase64 = (bytes: Uint8Array): string =>
+const bytesToBase64 = (bytes: Uint8Array): string =>
   Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64");
 
-export const base64ToBytes = (value: string): Uint8Array =>
-  new Uint8Array(Buffer.from(value, "base64"));
-
-export const toEngineDocuments = (session: SessionState): readonly EngineDocumentInput[] =>
-  session.documents.map((document) => ({
+/**
+ * Builds the engine request for a session.
+ * @param session Session state, which must already hold a pipeline.
+ * @param apiKey Provider credential held in the session.
+ */
+export const toEngineRequest = (session: SessionState, apiKey: string): EngineRequest => {
+  if (session.pipeline === null) {
+    throw new Error("Cannot build an engine request without a pipeline.");
+  }
+  const documents: EngineRequest["documents"][number][] = session.documents.map((document) => ({
     id: document.id,
     name: document.name,
     sizeBytes: document.sizeBytes,
@@ -21,15 +30,10 @@ export const toEngineDocuments = (session: SessionState): readonly EngineDocumen
     pageCount: document.pageCount,
   }));
 
-export const toEngineSession = (session: SessionState, apiKey: string): EngineSessionInput => {
-  if (session.pipeline === null) {
-    throw new Error("Cannot build an engine session without a pipeline.");
-  }
   return {
     sessionId: session.id,
     config: session.pipeline,
     apiKey,
-    documents: toEngineDocuments(session),
-    history: session.chat,
+    documents,
   };
 };

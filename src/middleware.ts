@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { isEngineProxyRequest, proxyToLocalEngine } from "@/lib/engine-proxy";
 import { LIMITS } from "@/lib/rules";
 import {
   SESSION_COOKIE_DEV,
@@ -11,33 +10,31 @@ import {
 import { newSessionId, sessionSecret, signId, verifyId } from "@/lib/session-token";
 
 /**
- * Middleware owns two jobs, both of which must happen before a request reaches a
- * route or a Server Action:
- *
- *  1. `/engine/*` is proxied to the local engine. In production Vercel's router does
- *     this from the `vercel.json` rewrite, so the branch is inert there; locally it
- *     is what makes the same-origin engine default testable.
- *  2. Every other request is guaranteed a valid, signed session handle. Server
- *     Actions cannot set cookies, so the handle has to be minted here — and because
- *     middleware also runs for a Server Action POST to the same URL as the page, both
- *     the page and the action see the same handle.
+ * Middleware guarantees every request carries a valid, signed session handle
+ * before it reaches a route or a Server Action.
  *
  * The handle is a *session id*, not session state: the cookie is a few dozen bytes
  * regardless of how much the session holds, and the state lives server-side, so an
- * expired or unknown id is cheap to replace.
+ * expired or unknown id is cheap to replace. Server Actions cannot set cookies, so
+ * the handle has to be minted here — and because middleware also runs for a Server
+ * Action POST to the same URL as the page, both the page and the action see the
+ * same handle.
+ *
+ * There is no engine branch any more: the RAG pipeline is a module in this same
+ * process, so there is nothing to proxy and no internal service URL to rewrite.
  *
  * The secret is read from `process.env` rather than through the env module so this
  * file's dependency graph stays limited to Web Crypto.
  */
 
 export const config = {
+  // Node, not Edge: the RAG pipeline shares this process, and a Node middleware
+  // keeps one runtime for the whole request rather than two.
+  runtime: "nodejs",
   matcher: ["/((?!_next/static|_next/image|brand|favicon.ico).*)"],
 };
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
-  if (isEngineProxyRequest(request.nextUrl.pathname)) {
-    return proxyToLocalEngine(request);
-  }
   return sessionMiddleware(request);
 }
 

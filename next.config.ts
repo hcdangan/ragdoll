@@ -7,7 +7,7 @@ import type { NextConfig } from "next";
  * nonce-less static header cannot whitelist, and a nonce'd CSP requires the
  * full dynamic-rendering middleware path for every route. Everything else is
  * locked down; `connect-src` stays same-origin because the browser never talks
- * to the LLM provider directly — the FastAPI bridge does.
+ * to the LLM provider directly — the server-side pipeline does.
  */
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },

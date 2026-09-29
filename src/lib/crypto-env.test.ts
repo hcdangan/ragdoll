@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createSessionId, maskSecret } from "@/lib/crypto";
-import { ENGINE_PROXY_PATH, isEngineConfigured, isRelativeEngineUrl, readServerEnv } from "@/lib/env";
+import { readServerEnv } from "@/lib/env";
 import { AppError, appError, fail, ok, toErrorShape } from "@/lib/errors";
 import {
   EMBEDDING_DIMENSIONS,
@@ -45,46 +45,23 @@ describe("createSessionId", () => {
 describe("readServerEnv", () => {
   it("falls back to development defaults outside production", () => {
     const env = readServerEnv({ NODE_ENV: "development" } as NodeJS.ProcessEnv);
-    // No RAGDOLL_API_URL anywhere: the engine is reached through the same-origin
-    // `/engine` rewrite, which is what keeps a Vercel import zero-config.
-    expect(env.engineUrl).toBe("/engine");
+    // No engine configuration exists any more: the RAG pipeline is a module in
+    // this process, so a deployment has nothing to point at.
     expect(env.sessionSecret.length).toBeGreaterThanOrEqual(32);
     expect(env.kv).toBeNull();
-    expect(isEngineConfigured(env)).toBe(true);
+    expect(env.hosted).toBe(false);
   });
 
-  it("keeps the engine URL relative on Vercel so the request origin can supply it", () => {
+  it("detects a hosted deployment from VERCEL", () => {
     // VERCEL_URL is deliberately not consulted: it is not exposed to the running
-    // function, so the origin is derived from the request headers at call time.
+    // function, so nothing depends on it.
     const env = readServerEnv({
       NODE_ENV: "production",
       VERCEL: "1",
       VERCEL_URL: "ragdoll-abc123.vercel.app",
       RAGDOLL_SESSION_SECRET: "b".repeat(40),
-      RAGDOLL_API_TOKEN: "c".repeat(40),
     } as NodeJS.ProcessEnv);
-    expect(env.engineUrl).toBe(ENGINE_PROXY_PATH);
-    expect(isRelativeEngineUrl(env.engineUrl)).toBe(true);
     expect(env.hosted).toBe(true);
-  });
-
-  it("prefers an explicitly configured engine URL", () => {
-    const env = readServerEnv({
-      NODE_ENV: "development",
-      RAGDOLL_API_URL: "http://127.0.0.1:8000/",
-    } as NodeJS.ProcessEnv);
-    expect(env.engineUrl).toBe("http://127.0.0.1:8000");
-  });
-
-  it("reports a hosted deployment with no token as unconfigured, not ready", () => {
-    const env = readServerEnv({
-      NODE_ENV: "production",
-      VERCEL: "1",
-      RAGDOLL_SESSION_SECRET: "b".repeat(40),
-    } as NodeJS.ProcessEnv);
-    expect(env.engineToken).toBe("");
-    // Fails closed: every engine call would 401, so the UI must not claim ready.
-    expect(isEngineConfigured(env)).toBe(false);
   });
 
   it("refuses to start in production without a strong session secret", () => {
@@ -94,17 +71,6 @@ describe("readServerEnv", () => {
         RAGDOLL_SESSION_SECRET: "short",
       } as NodeJS.ProcessEnv),
     ).toThrow(/SESSION_SECRET/);
-  });
-
-  it("requires a bridge token once an external engine URL is configured", () => {
-    expect(() =>
-      readServerEnv({
-        NODE_ENV: "production",
-        RAGDOLL_SESSION_SECRET: "b".repeat(40),
-        RAGDOLL_API_URL: "https://engine.example.com",
-        RAGDOLL_API_TOKEN: "tiny",
-      } as NodeJS.ProcessEnv),
-    ).toThrow(/API_TOKEN/);
   });
 
   it("detects a hosted deployment", () => {

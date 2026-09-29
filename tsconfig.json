@@ -36,5 +36,5 @@
     "e2e/**/*.ts",
     "scripts/**/*.ts"
   ],
-  "exclude": ["node_modules", ".next", "api", "tools", ".venv"]
+  "exclude": ["node_modules", ".next", "tools", ".venv"]
 }

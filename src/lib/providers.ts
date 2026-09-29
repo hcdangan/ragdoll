@@ -10,9 +10,10 @@ import {
 } from "./types";
 
 /**
- * Single source of truth for provider behaviour. The FastAPI engine mirrors
- * this table in `api/providers.py`; changing one without the other is the
- * one drift this project cannot tolerate, so both files carry the same order.
+ * Single source of truth for provider behaviour. The pipeline reads this table
+ * directly — `src/lib/rag/llm.ts` speaks one of exactly two wire protocols and
+ * branches on `id` — so the provider that validates in the creation form is, by
+ * construction, the provider that answers in chat.
  */
 
 export interface ProviderDefinition {

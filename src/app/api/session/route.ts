@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getServerEnv } from "@/lib/env";
 import type { TranslationKey } from "@/lib/i18n";
-import { engineConfigured, getEngine } from "@/lib/pipeline/engine";
 import { toPipelineSummary } from "@/lib/pipeline/session-helpers";
+import { reset } from "@/lib/rag/service";
 import { describeApiKey } from "@/lib/secrets";
 import {
   adoptSession,
@@ -32,7 +32,6 @@ export interface SessionSnapshot {
   readonly pipeline: PipelineSummary | null;
   readonly provider: ProviderKeyStatus | null;
   readonly capabilities: {
-    readonly engine: boolean;
     readonly chat: boolean;
     readonly evaluate: boolean;
     readonly sharedStore: boolean;
@@ -68,7 +67,6 @@ export async function GET(): Promise<NextResponse> {
     pipeline,
     provider: status,
     capabilities: {
-      engine: engineConfigured(),
       chat: session.pipeline !== null && status?.hasKey === true,
       evaluate: session.pipeline !== null,
       sharedStore: env.kv !== null,
@@ -101,13 +99,7 @@ export async function DELETE(): Promise<NextResponse> {
     return NextResponse.json({ cleared: true });
   }
 
-  if (engineConfigured()) {
-    try {
-      await (await getEngine()).reset(resolved.session.id);
-    } catch {
-      // A missing engine session is already the desired end state.
-    }
-  }
+  reset(resolved.session.id);
   await destroySession(resolved.session.id);
 
   return NextResponse.json({ cleared: true }, { headers: { "Cache-Control": "no-store" } });

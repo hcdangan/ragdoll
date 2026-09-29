@@ -5,27 +5,19 @@ import { resolve } from "node:path";
 /**
  * Full pipeline journey: configure → index → chat with citations → evaluate.
  *
- * Requires a reachable engine, because this is the only test that exercises the
- * Server Action bridge, the SSE adapter and `useChat` together. Point it at the
- * offline engine with:
+ * This is the only test that exercises the Server Action bridge, the streaming
+ * route and `useChat` together, and it runs against the whole app rather than a
+ * mock. The RAG pipeline is a module in the Next.js server now, so there is no
+ * service to start: the offline provider (`RAGDOLL_DEV_PROVIDER=1`, set by
+ * `playwright.config.ts`) supplies deterministic answers and embeddings.
  *
- *   RAGDOLL_DEV_PROVIDER=1 python -m uvicorn main:app --port 8000 --app-dir api
- *   pnpm build && pnpm start                     # serves the app and proxies /engine
+ *   pnpm build && pnpm start
  *   PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 pnpm e2e
- *
- * The engine's default location is the same-origin `/engine` path, which
- * `vercel.json` rewrites in production and `src/middleware.ts` proxies locally, so
- * no engine URL has to be configured for the journey to run.
- *
- * `RAGDOLL_API_URL` is only used as the skip flag below: without it the suite skips
- * rather than failing, so `pnpm e2e` stays useful on a machine with no engine.
  */
 
 const FIXTURE = resolve(__dirname, ".fixtures", "handbook.pdf");
-const engineConfigured = Boolean(process.env.RAGDOLL_API_URL);
 
 test.describe("pipeline journey", () => {
-  test.skip(!engineConfigured, "RAGDOLL_API_URL is not configured for this run.");
   test.skip(!existsSync(FIXTURE), "Run `node scripts/make-fixture.mjs` first.");
 
   test("creates a pipeline, answers with citations and evaluates", async ({ page }) => {

@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import { appError, fail, ok, type ActionResult } from "@/lib/errors";
-import { requireEngine } from "@/lib/pipeline/engine";
+import { toAppError } from "@/lib/pipeline/engine-errors";
 import { enginePayload } from "@/lib/pipeline/session-helpers";
+import { DEFAULT_SAMPLE_SIZE, MAX_SAMPLE_SIZE, runEvaluation } from "@/lib/rag/evaluation";
 import { requireApiKey } from "@/lib/secrets";
 import { adoptSession, readSessionToken } from "@/lib/session";
 import type { EvaluationReport } from "@/lib/types";
@@ -12,10 +13,11 @@ import type { EvaluationReport } from "@/lib/types";
 /**
  * Evaluation Server Action.
  *
- * The metric suite lives in the engine because it owns the index; this action
- * only guards the preconditions and returns a typed report. Multimodal metrics
- * come back as `"N/A"` with a `skippedReason` when every upload was text-only,
- * so the UI never has to guess why a score is missing.
+ * The metric suite runs in this process because it needs the index and the
+ * provider client, both of which live in the session. This action only guards the
+ * preconditions and returns a typed report. Multimodal metrics come back as
+ * `"N/A"` with a `skippedReason` when every upload was text-only, so the UI never
+ * has to guess why a score is missing.
  */
 
 export interface EvaluationRequestData {
@@ -34,17 +36,15 @@ export async function runEvaluationAction(
     }
 
     const apiKey = requireApiKey(session);
-    const engine = await requireEngine();
-    const sampleCount = Math.max(1, Math.min(12, Math.round(request.sampleCount)));
+    const sampleCount = Number.isFinite(request.sampleCount)
+      ? Math.max(1, Math.min(MAX_SAMPLE_SIZE, Math.round(request.sampleCount)))
+      : DEFAULT_SAMPLE_SIZE;
 
-    const report = await engine.evaluate(enginePayload(session, apiKey), {
-      sessionId: session.id,
-      sampleCount,
-    });
+    const report = await runEvaluation(enginePayload(session, apiKey), { sampleCount });
 
     revalidatePath("/evaluate");
     return ok(report);
   } catch (error) {
-    return fail(error);
+    return fail(toAppError(error));
   }
 }

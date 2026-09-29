@@ -1,0 +1,40 @@
+# What Vercel must upload for a build, and nothing more.
+#
+# The CLI uploads the working tree; this file decides what travels. `.gitignore` is
+# not sufficient: it governs what is *committed*, and the two sets differ —
+# generated directories are gitignored but still present on disk.
+
+# Local tooling and dependency caches (all regenerated)
+.tools/
+.npm-cache/
+.pnpm-store/
+node_modules/
+.venv/
+venv/
+
+# Build output — Vercel builds from source
+.next/
+out/
+
+# Linter caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Test reports and E2E fixtures
+test-results/
+playwright-report/
+coverage/
+e2e/.fixtures/
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# Repository metadata and prose the runtime never reads
+.git/
+.github/
+AGENTS.md
+DEPLOYMENT.md
+README.md

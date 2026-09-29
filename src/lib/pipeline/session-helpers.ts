@@ -1,42 +1,30 @@
 import "server-only";
 
-import { AppError, appError } from "../errors";
-import { requireEngine } from "./engine";
-import type { EngineSessionInput } from "./engine-contract";
-import { toEngineSession } from "./wire";
+import { appError } from "../errors";
+import type { EngineRequest } from "../rag/service";
 import type { PipelineSummary, SessionState } from "../types";
+import { toEngineRequest } from "./wire";
 
 /**
  * Session-scoped helpers shared by Server Actions and route handlers.
  *
- * The engine keeps its own copy of the index, and that copy can disappear when a
- * Function instance is recycled. Callers handle the `pipeline_missing` code by
- * rebuilding from the PDFs the session still holds — `ensureIndex` is idempotent,
- * so re-running it is always safe.
+ * The pipeline keeps its own copy of the index, and that copy lives in process
+ * memory — it disappears when a Function instance is recycled. Callers handle the
+ * `pipeline_missing` code by rebuilding from the PDFs the session still holds,
+ * which `ensureIndex` does on demand and safely, because it is idempotent.
  */
 
 /**
- * Builds the engine payload for a session.
+ * Builds the engine request for a session.
  * @param session Session state.
  * @param apiKey Provider key held in the session.
  */
-export const enginePayload = (session: SessionState, apiKey: string): EngineSessionInput => {
+export const enginePayload = (session: SessionState, apiKey: string): EngineRequest => {
   if (session.pipeline === null) {
     throw appError("pipeline_missing");
   }
-  return toEngineSession(session, apiKey);
+  return toEngineRequest(session, apiKey);
 };
-
-/** True when the session holds a pipeline the engine can be asked about. */
-export const hasPipeline = (session: SessionState): boolean => session.pipeline !== null;
-
-/** Re-wraps an unknown failure, preserving AppErrors. */
-export const asAppError = (error: unknown, fallbackMessage?: string): AppError =>
-  error instanceof AppError
-    ? error
-    : new AppError("internal", fallbackMessage ?? "Something went wrong. Try again.", {
-        cause: error,
-      });
 
 /** Summarises a session for the UI without exposing the API key. */
 export const toPipelineSummary = (session: SessionState): PipelineSummary | null => {
@@ -61,14 +49,4 @@ export const toPipelineSummary = (session: SessionState): PipelineSummary | null
     chatTurnCount: session.chat.length,
     multimodal: documents.some((document) => document.hasImages),
   };
-};
-
-/** Rebuilds an engine index from the PDFs the session still holds. */
-export const rebuildIndex = async (
-  session: SessionState,
-  apiKey: string,
-): Promise<{ readonly chunkCount: number; readonly documents: number }> => {
-  const engine = await requireEngine();
-  const upsert = await engine.ensureIndex(enginePayload(session, apiKey));
-  return { chunkCount: upsert.chunkCount, documents: upsert.documents.length };
 };

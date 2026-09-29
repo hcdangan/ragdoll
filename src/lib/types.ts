@@ -1,7 +1,7 @@
 /**
- * Domain types shared by the browser, the Next.js server, and (mirrored as
- * Pydantic models) the FastAPI engine. Everything here is JSON-serialisable
- * because pipeline state crosses a process boundary on every request.
+ * Domain types shared by the browser and the Next.js server. Everything here is
+ * JSON-serialisable because pipeline state is persisted to KV and rehydrated into
+ * a server-side session on the next request.
  */
 
 export const PROVIDER_IDS = ["openai", "vocareum", "deepseek", "ollama"] as const;
@@ -68,7 +68,6 @@ export interface DocumentSummary {
 /** Persisted shape of a session, stored in KV or sealed into the cookie. */
 export interface PersistedSession {
   readonly id: string;
-  readonly engineSessionId: string | null;
   readonly pipeline: PipelineConfig | null;
   readonly documents: readonly {
     readonly id: string;
@@ -95,6 +94,8 @@ export interface Citation {
   readonly page: number;
   readonly score: number;
   readonly snippet: string;
+  /** Zero-based retrieval rank, so the panel can order sources without re-sorting. */
+  readonly rank?: number;
 }
 
 export interface ChatTurn {
@@ -118,8 +119,6 @@ export interface PipelineSummary {
 /** Server-side session payload. Never leaves the Next.js process unencrypted. */
 export interface SessionState {
   readonly id: string;
-  /** FastAPI-side session handle that owns the vector index. */
-  engineSessionId: string | null;
   /** Active pipeline configuration, null until the user creates one. */
   pipeline: PipelineConfig | null;
   readonly documents: UploadedDocument[];

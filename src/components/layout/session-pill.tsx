@@ -16,7 +16,7 @@ import { t } from "@/lib/i18n";
  */
 
 export function SessionPill(): ReactElement {
-  const { pipeline, expiresAt, hasPipeline, engineConfigured, snapshot, refetch } = useSession();
+  const { pipeline, expiresAt, hasPipeline, snapshot, refetch } = useSession();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -48,12 +48,6 @@ export function SessionPill(): ReactElement {
 
   return (
     <div className="hidden items-center gap-2 sm:flex">
-      {engineConfigured ? null : (
-        <span className="badge-danger">
-          <IconDatabase className="h-3.5 w-3.5" />
-          {t("status.engineMissing")}
-        </span>
-      )}
       {sharedStore ? null : (
         <span className="badge-warn" title={t("session.noSharedStore")}>
           {t("status.noSharedStore")}

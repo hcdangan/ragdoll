@@ -85,7 +85,7 @@ export const embeddingDimensionFor = (
 export const exceedsContextWindow = (estimatedTokens: number, maxInputTokens: number): boolean =>
   estimatedTokens >= maxInputTokens;
 
-/** Rough token estimate that matches the FastAPI chunker (±10% on prose). */
+/** Rough token estimate that matches the engine's chunker (±10% on prose). */
 export const estimateTokens = (text: string): number => {
   const trimmed = text.trim();
   if (trimmed.length === 0) {

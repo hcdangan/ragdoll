@@ -1,8 +1,10 @@
 name: CI
 
-# Frontend and backend gates from AGENTS.md. Every job must pass before merge, so
-# they are deliberately independent: a Python type error must not hide a broken
-# TypeScript build, and vice versa.
+# Gates from AGENTS.md. Every job must pass before merge, so they are deliberately
+# independent: a type error must not hide a broken build, and vice versa.
+#
+# There is no separate API job any more: the RAG pipeline is TypeScript inside the
+# Next.js app, so the web job covers it and CodeQL has one language to scan.
 
 on:
   pull_request:
@@ -16,12 +18,11 @@ concurrency:
 
 env:
   NODE_VERSION: "20.x"
-  PYTHON_VERSION: "3.13"
   PNPM_VERSION: "9.15.4"
 
 jobs:
   web:
-    name: Web (lint, types, unit)
+    name: Web (lint, types, unit, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,41 +44,10 @@ jobs:
       - name: Build
         run: pnpm build
         env:
-          # The build must not require real secrets; these are shape-only values.
+          # The build must not require real secrets; this is a shape-only value.
           RAGDOLL_SESSION_SECRET: ci-session-secret-value-0123456789abcdef
-          RAGDOLL_API_TOKEN: ci-engine-token-0123456789abcdef
       - name: Dependency audit
         run: pnpm audit --audit-level=high
-
-  api:
-    name: API (ruff, mypy, pytest)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: api
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio ruff==0.8.6 mypy==1.14.1 pip-audit
-      - name: Ruff lint
-        run: ruff check .
-      - name: Ruff format
-        run: ruff format --check .
-      - name: Mypy
-        run: mypy
-      - name: Pytest
-        run: pytest -q
-        env:
-          PYTHONPATH: ${{ github.workspace }}/api
-      - name: Dependency audit
-        run: pip-audit --strict
 
   codeql:
     name: CodeQL (${{ matrix.language }})
@@ -89,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [javascript-typescript, python]
+        language: [javascript-typescript]
     steps:
       - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v3
@@ -100,42 +70,9 @@ jobs:
         with:
           category: /language:${{ matrix.language }}
 
-  type-sync:
-    name: OpenAPI type sync
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-      - name: Install
-        run: |
-          pnpm install --frozen-lockfile
-          python -m pip install -r api/requirements.txt
-      - name: Regenerate the contract
-        run: |
-          PYTHONPATH="$PWD/api" python api/tools/export_openapi.py
-          pnpm exec openapi-typescript api/openapi.json -o src/lib/pipeline/api-schema.d.ts
-      - name: Fail on drift
-        run: |
-          if ! git diff --quiet -- api/openapi.json src/lib/pipeline/api-schema.d.ts; then
-            echo "::error::The engine schema changed without regenerating src/lib/pipeline/api-schema.d.ts."
-            echo "Run: PYTHONPATH=\$PWD/api python api/tools/export_openapi.py && pnpm api:types"
-            git --no-pager diff --stat -- api/openapi.json src/lib/pipeline/api-schema.d.ts
-            exit 1
-          fi
-
   e2e:
     name: E2E (Playwright)
-    # Pull requests only: the journey needs the engine, and running it on every
+    # Pull requests only: the journey needs a full build, and running it on every
     # push to main roughly doubles CI minutes for no extra signal.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -148,29 +85,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
       - name: Install
         run: |
           pnpm install --frozen-lockfile
-          python -m pip install -r api/requirements.txt
           pnpm exec playwright install --with-deps chromium
-      - name: Start the offline engine
-        run: |
-          RAGDOLL_DEV_PROVIDER=1 RAGDOLL_API_TOKEN=ci-engine-token-0123456789abcdef \
-            python -m uvicorn main:app --port 8123 --app-dir api &
-          for attempt in $(seq 1 30); do
-            curl -sf http://127.0.0.1:8123/health && break
-            sleep 1
-          done
       - name: Start the app
         run: |
           pnpm build
           RAGDOLL_SESSION_SECRET=ci-session-secret-value-0123456789abcdef \
-          RAGDOLL_API_TOKEN=ci-engine-token-0123456789abcdef \
-          RAGDOLL_API_URL=http://127.0.0.1:8123 \
+          RAGDOLL_DEV_PROVIDER=1 \
           RAGDOLL_HOSTED=0 \
           pnpm start --port 3000 &
           for attempt in $(seq 1 45); do
@@ -181,7 +104,6 @@ jobs:
         run: pnpm e2e
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
-          RAGDOLL_API_URL: http://127.0.0.1:8123
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

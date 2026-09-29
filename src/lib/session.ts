@@ -134,7 +134,6 @@ const kvCommand = async (command: readonly (string | number)[]): Promise<unknown
  */
 interface StoredSession {
   readonly id: string;
-  readonly engineSessionId: string | null;
   readonly pipeline: SessionState["pipeline"];
   readonly documents: readonly {
     readonly id: string;
@@ -159,7 +158,6 @@ const kvSet = async (session: SessionState): Promise<void> => {
     kvKey(session.id),
     JSON.stringify({
       id: session.id,
-      engineSessionId: session.engineSessionId,
       pipeline: session.pipeline,
       documents: session.documents.map((document) => ({
         id: document.id,
@@ -188,7 +186,6 @@ const kvGet = async (id: string): Promise<SessionState | null> => {
   const stored = JSON.parse(raw) as StoredSession;
   return {
     id: stored.id,
-    engineSessionId: stored.engineSessionId,
     pipeline: stored.pipeline,
     documents: stored.documents.map<UploadedDocument>((document) => ({
       id: document.id,
@@ -347,7 +344,6 @@ export const createEmptySession = (id?: string): SessionState => {
   const now = Date.now();
   return {
     id: id ?? newSessionId(),
-    engineSessionId: null,
     pipeline: null,
     documents: [],
     chat: [],

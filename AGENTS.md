@@ -7,11 +7,11 @@ RAGdoll is a RAG pipeline workbench and chatbot. It allows the custom creation o
 You are an elite, production-grade software engineer optimized for **deepseek-flash**. Your goal is to provide highly efficient, deterministic, and type-safe code that adheres strictly to the architectural constraints outlined below.
 
 ## Technology Stack
-- **Languages:** TypeScript (Strict Mode), Python 3.13
+- **Languages:** TypeScript (Strict Mode)
 - **Frontend:** Next.js 15 (App Router), React 19, TailwindCSS, Vercel AI SDK
-- **Backend:** Python, FastAPI, Pydantic, Vercel AI SDK
+- **Backend:** TypeScript in the Next.js server — Route Handlers and Server Actions. The RAG pipeline is a module (`src/lib/rag/`), not a separate service.
 - **State/Data Fetching:** TanStack Query (React Query)
-- **Testing:** Vitest (TS unit), Playwright (E2E), pytest (Python unit/integration)
+- **Testing:** Vitest (unit + in-process engine integration), Playwright (E2E)
 
 ## Code Style & Architectural Patterns
 - **Paradigm:** Functional over object-oriented. Use pure functions, immutable data patterns, and composition.
@@ -23,43 +23,44 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
 - RAG pipeline creation should be stored in-memory in the user's session.
 - Retrieval strategy:
   - Single-shot queries: Retrieve top-K chunks and inject them as a tagged context block before generation (Context Injection).
-  - Agentic / multi-hop queries: Expose retrieval as a tool call the LLM can invoke repeatedly.
+  - Agentic / multi-hop queries: Expose retrieval as a call the LLM can invoke repeatedly. Expressed as a JSON tool protocol in the prompt, not native tool calling — not every supported provider implements `tools`, and the JSON form degrades to plain retrieval instead of failing.
   - Default to Context Injection; enable tool-call retrieval only when the pipeline is configured for agentic mode.
 - Multi-Turn Handling: For multi-turn conversations, compress recent history into a standalone query before embedding. This avoids retrieval degradation from ambiguous references.
 - Fallback Strategy: If retrieval returns no results or the answer fails a groundedness check, the output should be "Sorry, I don't know the answer to that."
 - Groundedness Check: After generation, run a Ragas `faithfulness` pass of the answer against the retrieved chunks. If score < 0.5, discard the answer and emit the fallback string.
 
 ### API Bridge & Data Flow
-- Server Action Wrapping: Each non-streaming RAG operation (e.g., testConnection, createPipeline, runEvaluation) corresponds to a Server Action. The action fetches the FastAPI endpoint, handles errors, timeouts, and retries, then returns clean TypeScript types to the component.
-- Streaming Exception: Server Actions cannot stream responses to the browser. Streaming chat MUST use a Next.js Route Handler (`app/api/chat/route.ts`) that proxies the FastAPI SSE stream and re-emits it via the Vercel AI SDK Data Stream Protocol.
+- Server Action Wrapping: Each non-streaming RAG operation (e.g., testConnection, createPipeline, runEvaluation) corresponds to a Server Action. The action calls the pipeline directly, translates its failures into the app's error vocabulary (`src/lib/pipeline/engine-errors.ts`), and returns clean TypeScript types to the component.
+- Streaming Exception: Server Actions cannot stream responses to the browser. Streaming chat MUST use a Next.js Route Handler (`app/api/chat/route.ts`) that consumes the pipeline's typed `StreamEvent` generator and re-emits it via the Vercel AI SDK Data Stream Protocol.
 - Session Store: Server-side in-memory store keyed by a signed session cookie (`__Host-ragdoll-sid`). TTL 15 minutes, sliding — refreshed on any Server Action or Route Handler call. On Vercel (multi-instance), use Vercel KV or Upstash Redis; Function instances do not share memory. After expiry, the pipeline, uploaded PDFs, API key, and chat history are purged.
-- Type Synchronization: FastAPI emits `openapi.json`; run `openapi-typescript` in CI to generate `packages/api-types/schema.d.ts`. Commit generated types; CI fails on drift.
+- Index Rebuild: The vector index is in-process and is not mirrored to KV. A cold instance rebuilds it from the PDF bytes the session still holds, which is why uploads travel with the session.
+- Type Synchronisation: Not applicable — there is no cross-language boundary to keep in sync. The pipeline and its callers share one TypeScript type graph.
 
 ### Streaming Responses
-- SSE Streaming: FastAPI exposes a `StreamingResponse` endpoint for chat. Next.js proxies via a Route Handler (`app/api/chat/route.ts`) — not a Server Action.
-- AI SDK Integration: The Route Handler adapts the FastAPI SSE stream to the Vercel AI SDK Data Stream Protocol. Frontend consumes it with `useChat`.
+- Typed Event Streaming: the pipeline exposes `answerStream()` as an async generator of discriminated `StreamEvent`s. The Route Handler (`app/api/chat/route.ts`) maps them onto the Vercel AI SDK Data Stream Protocol — not a Server Action.
+- AI SDK Integration: The Route Handler writes `data-*`, `text-*` and `finish` parts; the frontend consumes them with `useChat`.
 - Citation-First Streaming: Before emitting assistant tokens, send retrieved sources as Vercel AI SDK `data` stream parts (AI SDK v5 Data Stream Protocol) with a `citation` payload type. The `useChat` `onData` callback populates the citation panel immediately. Sources are keyed by document ID and page number.
-- Timeout & Abort: 60s per streaming request. Client aborts via `AbortController` on unmount or user interrupt.
+- Timeout & Abort: 60s per streaming request. The client aborts via `AbortController` on unmount or user interrupt; the signal is threaded into generation, and an aborted answer is kept as-is rather than judged.
 - Platform Limit Note: 60s fits Vercel Hobby/Pro defaults. Raise `maxDuration` explicitly if a longer timeout is needed on Enterprise.
 
 ### Vercel Deployment Architecture
-- Single Project, Dual Runtime: Vercel supports deploying Next.js and Python functions in the same project. Configure vercel.json or use Services to run FastAPI as a Python Function alongside the Next.js frontend.
-- Python Entrypoint: Vercel auto-detects a FastAPI app instance in app.py, main.py, server.py, wsgi.py, or asgi.py at the root or inside src/ or app/. You can also specify it via tool.vercel.entrypoint in pyproject.toml.
-- Fluid Compute & Active CPU: FastAPI functions run on Fluid compute by default. Under Active CPU pricing, time spent waiting for tokens during streaming is not billed as CPU, and a single instance can serve multiple concurrent streams.
-- Vector DB Region Alignment: Deploy your vector database in the same region as your Vercel Functions to keep retrieval queries to a single intra-region round trip, significantly reducing latency.
-- Vector Store: In-memory NumPy/FAISS index per session by default. For persistent pipelines, support Qdrant or pgvector with region pinned to the Vercel Function region.
+- Single Project, Single Runtime: Next.js only. The pipeline is a module inside the server, so `vercel.json` declares no functions, no rewrites and no second entrypoint — the project imports unchanged.
+- Fluid Compute & Active CPU: Route Handlers run on Fluid compute by default. Under Active CPU pricing, time spent waiting for tokens during streaming is not billed as CPU, and a single instance can serve multiple concurrent streams.
+- Vector DB Region Alignment: Deploy your KV store and pin `regions` to sit near the LLM provider, so retrieval and generation each stay a single intra-region round trip.
+- Vector Store: In-memory typed-array index per session by default. For persistent pipelines, support Qdrant or pgvector with region pinned to the Vercel Function region.
+- Serverless Constraint: keep the function bundle small. This is why the pipeline is TypeScript in the app rather than a bundled runtime of its own — Vercel's 225 MB function limit is easy to exceed with a packed interpreter.
 
 ### Cost & Telemetry
-- Token Metering: Track token usage (prompt + completion) per call on the FastAPI side, recording by route or user dimension for cost attribution.
+- Token Metering: Track token usage (prompt + completion) per call in the pipeline, recording by route for cost attribution. Usage is already returned on every completion and streamed as the final delta.
 - Start with Lightweight Logging: Begin with structured logs capturing duration, retrieval hit count, reranker results, and LLM latency per RAG call.
-- OpenTelemetry Extension: When full trace visibility is needed, add OpenTelemetry SDK and OTLP exporter to trace the full path from Next.js to FastAPI to the LLM provider.
+- OpenTelemetry Extension: When full trace visibility is needed, add OpenTelemetry SDK and OTLP exporter to trace the full path from the Route Handler to the LLM provider.
 
 ### Security & Guardrails
-- Pydantic Output Validation: Enforce structured LLM output with Pydantic models. Reject or retry when the format doesn't match.
-- Input Filtering (Jailbreak): Use Guardrails AI Detect Jailbreak (https://guardrailsai.com/hub/validator/guardrails/detect_jailbreak). Reject the input and notify the user of an attempted jailbreak if detected.
-- Input Filtering (Prompt Injection): Use Guardrails AI Detect Prompt Injection (https://guardrailsai.com/hub/validator/guardrails/detect_prompt_injection). Reject the input and notify the user of an attempted prompt injection if detected.
-- API Protection: If the FastAPI endpoint must be exposed (e.g., for direct frontend streaming), add authentication, rate limiting, or Vercel Firewall rules.
-- PDF Sandboxing: Parse PDFs in a sandboxed process (e.g., `pypdf` with a memory cap; no shell-outs to `pdftotext`). Reject PDFs containing JavaScript, embedded files, or launch actions.
+- Output Validation: Enforce structured LLM output against a declared TypeScript shape and reject or retry when the format doesn't match — every judge response is parsed defensively and degrades to "unknown" rather than a fabricated score.
+- Input Filtering (Jailbreak): Pattern-based detection (`src/lib/rag/guardrails.ts`). Reject the input and notify the user of an attempted jailbreak if detected.
+- Input Filtering (Prompt Injection): Pattern-based detection in the same module, which also neutralises role tags and `system:`-style labels inside retrieved text before it reaches a prompt. Reject the input and notify the user.
+- API Protection: The chat route and the Server Actions are the exposed surface; add authentication, rate limiting, or Vercel Firewall rules where abuse is a risk.
+- PDF Sandboxing: Parse PDFs in-process with `unpdf` (PDF.js compiled to WebAssembly) under count, per-file and total size caps, with no shell-outs. Reject PDFs containing JavaScript, embedded files, or launch actions by scanning the byte stream before parsing.
 
 ### Critical Constraints & Quality Guardrails
 - **Self-Correction:** Before outputting a solution, mentally verify syntax correctness, missing imports, and type alignment.
@@ -69,8 +70,8 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
 
 #### GitHub Actions
 - Triggers: `pull_request` to `main`, `push` to `main`.
-- Frontend: `pnpm lint` (ESLint), `pnpm typecheck` (`tsc --noEmit`), `pnpm test` (Vitest), `pnpm exec playwright test` (E2E on PR only), `pnpm audit --audit-level=high`, CodeQL `javascript-typescript`.
-- Backend: `ruff check`, `ruff format --check`, `mypy --strict`, `pytest`, `pip-audit`, CodeQL `python`.
+- Web: `pnpm lint` (ESLint), `pnpm typecheck` (`tsc --noEmit`), `pnpm test` (Vitest), `pnpm build`, `pnpm audit --audit-level=high`, CodeQL `javascript-typescript`.
+- E2E: `pnpm exec playwright test` on PRs, against a production build with `RAGDOLL_DEV_PROVIDER=1`.
 - All jobs must pass before merge.
 
 ## Output Formatting Preference
