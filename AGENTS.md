@@ -91,6 +91,7 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
 - Responsive layout: mobile-first; target ≥ 360px width.
 - Accessibility: WCAG 2.1 AA — keyboard navigation, focus rings, ARIA labels on all sliders and toggles.
 - Error boundary per route segment; failures render an inline retry, never a white screen.
+- Notifications: action results, errors and upload rejections render in a fixed, viewport-anchored stack — never inline in the page flow — so a message raised at the bottom of a long page stays visible. Every notice has a close button, and no notice is persisted: a page load starts with an empty stack, and a route change clears it.
 - All user-facing strings routed through a central i18n dictionary (English default).
 
 #### RAG Creation
@@ -111,6 +112,8 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
     - DeepSeek: https://api.deepseek.com/v1
     - Ollama/Llama.cpp: (user input)
   - Constraint: URLs are resolved from the Vercel Function's network, not the user's browser. Localhost and LAN URLs only work under self-hosted deployment. When running on Vercel, the "Test Connection" step must fail fast with: "Cannot reach localhost from a hosted deployment. Self-host RAGdoll to use local providers."
+  - Protocol follows the URL the user typed: a self-hosted base URL ending in `/v1` means the OpenAI-compatible surface (`/v1/chat/completions`, `/v1/embeddings`), which is all llama.cpp, LM Studio and vLLM expose. A bare origin means the native Ollama routes (`/api/chat`, `/api/embeddings`). Never strip the `/v1` and guess.
+  - Transport failures must name the route that was attempted, and a connect failure must say that the host/port has to be reachable from the machine running RAGdoll — an opaque "unreachable" is not actionable.
 
 ##### Model
   - A text input for the LLM to be used. With the following default values:

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  hasVersionSuffix,
   isLoopbackHost,
   LoopbackBlockedError,
   ProviderClient,
@@ -31,13 +32,32 @@ const OPENAI: ProviderOptions = {
 
 const VOCAREUM: ProviderOptions = { ...OPENAI, provider: "vocareum", baseUrl: "https://openai.vocareum.com/v1" };
 
+const DEEPSEEK: ProviderOptions = {
+  provider: "deepseek",
+  baseUrl: "https://api.deepseek.com/v1",
+  apiKey: "sk-test",
+  model: "deepseek-flash",
+  embeddingModel: "text-embedding-3-small",
+};
+
+/** Every hosted provider: one wire protocol, one contract, no Ollama branch. */
+const HOSTED: readonly (readonly [string, ProviderOptions])[] = [
+  ["OpenAI", OPENAI],
+  ["Vocareum", VOCAREUM],
+  ["DeepSeek", DEEPSEEK],
+];
+
 const OLLAMA: ProviderOptions = {
   provider: "ollama",
-  baseUrl: "http://localhost:11434/v1",
+  // Bare origin: a stock `ollama serve`, reached over its native routes.
+  baseUrl: "http://localhost:11434",
   apiKey: "",
   model: "llama3.2",
   embeddingModel: "nomic-embed-text",
 };
+
+/** The same server with the OpenAI-compatible surface named explicitly. */
+const OLLAMA_COMPAT: ProviderOptions = { ...OLLAMA, baseUrl: "http://localhost:11434/v1" };
 
 const MESSAGES: readonly ChatMessage[] = [{ role: "user", content: "hello" }];
 
@@ -170,6 +190,114 @@ describe("OpenAI-compatible protocol", () => {
   });
 });
 
+/**
+ * Regression guard for the Ollama protocol change.
+ *
+ * The client now picks its protocol from the base URL, which is only allowed to
+ * affect `ollama`. These cases pin the hosted providers to the OpenAI-compatible
+ * contract on every code path — request URL, request body, and the failure
+ * classification that decides whether the UI offers a retry or a re-key.
+ */
+describe("hosted providers are unaffected by the Ollama protocol change", () => {
+  for (const [name, options] of HOSTED) {
+    it(`${name}: posts chat to /v1/chat/completions with top-level sampling`, async () => {
+      const calls = stubFetch(() => jsonResponse(chatCompletion("ready")));
+
+      const completion = await new ProviderClient(options).complete(MESSAGES, {
+        temperature: 0.2,
+        maxTokens: 16,
+      });
+
+      expect(completion.text).toBe("ready");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.url).toBe(`${options.baseUrl}/chat/completions`);
+      expect(calls[0]?.body).toMatchObject({
+        model: options.model,
+        stream: false,
+        max_tokens: 16,
+        temperature: 0.2,
+      });
+      expect(calls[0]?.body).not.toHaveProperty("options");
+      expectNoField(calls, "num_predict");
+    });
+
+    it(`${name}: embeds through /v1/embeddings with an input list`, async () => {
+      const calls = stubFetch(() => jsonResponse({ data: [{ index: 0, embedding: [0.1, 0.2] }] }));
+
+      const [vector] = await new ProviderClient(options).embed(["a"]);
+
+      expect(vector).toEqual([0.1, 0.2]);
+      expect(calls[0]?.url).toBe(`${options.baseUrl}/embeddings`);
+      expect(calls[0]?.body).toMatchObject({ model: options.embeddingModel, input: ["a"] });
+      expect(calls[0]?.body).not.toHaveProperty("prompt");
+    });
+
+    it(`${name}: streams with stream_options and parses SSE frames`, async () => {
+      const frame = JSON.stringify({ choices: [{ delta: { content: "ok" } }] });
+      const calls = stubFetch(() => new Response(`data: ${frame}\n\ndata: [DONE]\n\n`));
+
+      let text = "";
+      for await (const delta of new ProviderClient(options).stream(MESSAGES, { maxTokens: 8 })) {
+        text += delta.text;
+      }
+
+      expect(text).toBe("ok");
+      expect(calls[0]?.url).toBe(`${options.baseUrl}/chat/completions`);
+      expect(calls[0]?.body).toMatchObject({ stream: true, stream_options: { include_usage: true } });
+      expect(calls[0]?.body).not.toHaveProperty("options");
+      expectNoField(calls, "num_predict");
+    });
+
+    it(`${name}: classifies failures without the self-hosted /v1 hint`, async () => {
+      stubFetch(() => jsonResponse({ error: { message: "bad request" } }, 404));
+
+      const failure = await new ProviderClient(options)
+        .complete(MESSAGES)
+        .catch((error: unknown) => error);
+
+      const providerError = failure as ProviderError;
+      expect(providerError).toBeInstanceOf(ProviderError);
+      expect(providerError.code).toBe("provider_error");
+      expect(providerError.message).toContain(`${options.baseUrl}/chat/completions`);
+      // The hint belongs to a self-hosted server that may only serve /v1 routes.
+      expect(providerError.message).not.toContain("end the base URL with /v1");
+    });
+  }
+
+  it("keeps the OpenAI protocol even for a hosted base URL without /v1", async () => {
+    const calls = stubFetch(() => jsonResponse(chatCompletion("ready")));
+
+    await new ProviderClient({ ...OPENAI, baseUrl: "https://gateway.example.com/openai" }).complete(
+      MESSAGES,
+      { maxTokens: 4 },
+    );
+
+    // The URL-shape branch is gated on `provider === "ollama"`: a gateway prefix
+    // must not be mistaken for a native Ollama origin.
+    expect(calls[0]?.url).toBe("https://gateway.example.com/openai/chat/completions");
+    expect(calls[0]?.body).toMatchObject({ max_tokens: 4 });
+    expect(calls[0]?.body).not.toHaveProperty("options");
+  });
+
+  it("measures DeepSeek end to end through the probe", async () => {
+    const calls = stubFetch((call) =>
+      call.url.endsWith("/chat/completions")
+        ? jsonResponse(chatCompletion("ready"))
+        : jsonResponse({ data: [{ index: 0, embedding: [0.5, 0.25] }] }),
+    );
+
+    const probe = await new ProviderClient(DEEPSEEK).probe();
+
+    expect(probe.echo).toBe("ready");
+    expect(probe.embeddingOk).toBe(true);
+    expect(probe.embeddingDimension).toBe(2);
+    expect(calls.map((call) => call.url)).toEqual([
+      "https://api.deepseek.com/v1/chat/completions",
+      "https://api.deepseek.com/v1/embeddings",
+    ]);
+  });
+});
+
 describe("Ollama protocol", () => {
   it("sends sampling controls nested under options, with no OpenAI fields", async () => {
     const calls = stubFetch(() => jsonResponse({ message: { content: "ready" } }));
@@ -211,6 +339,76 @@ describe("Ollama protocol", () => {
     expect(deltas.join("")).toBe("hi");
     expect(calls[0]?.body).toMatchObject({ stream: true, options: { num_predict: 8 } });
     expect(calls[0]?.body).not.toHaveProperty("stream_options");
+  });
+});
+
+describe("Ollama base URL selects the protocol", () => {
+  it("speaks the OpenAI-compatible routes when the base URL names /v1", async () => {
+    const calls = stubFetch((call) =>
+      call.url.endsWith("/chat/completions")
+        ? jsonResponse(chatCompletion("ready"))
+        : jsonResponse({ data: [{ index: 0, embedding: [0.1, 0.2] }] }),
+    );
+    const client = new ProviderClient(OLLAMA_COMPAT);
+
+    const completion = await client.complete(MESSAGES, { temperature: 0, maxTokens: 8 });
+
+    expect(completion.text).toBe("ready");
+    // The regression: `/v1` used to be stripped and the request sent to the native
+    // route, which a llama.cpp server does not serve at all.
+    expect(calls[0]?.url).toBe("http://localhost:11434/v1/chat/completions");
+    expect(calls[0]?.body).toMatchObject({ max_tokens: 8, temperature: 0 });
+    expectNoField(calls, "num_predict");
+
+    const [vector] = await client.embed(["a"]);
+
+    expect(vector).toEqual([0.1, 0.2]);
+    expect(calls[1]?.url).toBe("http://localhost:11434/v1/embeddings");
+    expect(calls[1]?.body).toMatchObject({ input: ["a"] });
+  });
+
+  it("keeps the native routes for a bare origin, trailing slash included", async () => {
+    const calls = stubFetch(() => jsonResponse({ message: { content: "ready" } }));
+
+    await new ProviderClient({ ...OLLAMA, baseUrl: "http://localhost:11434/" }).complete(MESSAGES);
+
+    expect(calls[0]?.url).toBe("http://localhost:11434/api/chat");
+  });
+});
+
+describe("transport diagnostics", () => {
+  /** An undici-style socket rejection: the code lives on `error.cause`. */
+  const connectFailure = (code: string): Error =>
+    new TypeError("fetch failed", {
+      cause: Object.assign(new Error("connect timed out"), { code }),
+    });
+
+  it("names the route that failed rather than only the base URL", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(connectFailure("UND_ERR_CONNECT_TIMEOUT")));
+
+    const failure = await new ProviderClient(OLLAMA)
+      .complete(MESSAGES)
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ProviderError);
+    expect((failure as ProviderError).code).toBe("provider_unreachable");
+    expect((failure as ProviderError).message).toContain("http://localhost:11434/api/chat");
+    expect((failure as ProviderError).message).toContain("UND_ERR_CONNECT_TIMEOUT");
+    // A connect timeout is actionable, so the message says what to check.
+    expect((failure as ProviderError).message).toContain("can reach the provider");
+  });
+
+  it("explains a missing native route instead of leaving a bare 404", async () => {
+    const calls = stubFetch(() => jsonResponse({ error: "model not found" }, 404));
+
+    const failure = await new ProviderClient(OLLAMA)
+      .complete(MESSAGES)
+      .catch((error: unknown) => error);
+
+    expect((failure as ProviderError).message).toContain("HTTP 404");
+    expect((failure as ProviderError).message).toContain("end the base URL with /v1");
+    // A 404 is deterministic, so it is not retried.
+    expect(calls).toHaveLength(1);
   });
 });
 
@@ -276,6 +474,14 @@ describe("url helpers", () => {
     expect(stripVersionSuffix("http://localhost:11434/v1/")).toBe("http://localhost:11434");
     expect(stripVersionSuffix("https://api.openai.com/v1")).toBe("https://api.openai.com");
     expect(stripVersionSuffix("http://localhost:11434")).toBe("http://localhost:11434");
+  });
+
+  it("detects the OpenAI-compatible suffix", () => {
+    expect(hasVersionSuffix("http://localhost:11434/v1")).toBe(true);
+    expect(hasVersionSuffix("http://localhost:11434/V1")).toBe(true);
+    expect(hasVersionSuffix("http://localhost:11434")).toBe(false);
+    expect(hasVersionSuffix("http://localhost:11434/v1beta")).toBe(false);
+    expect(hasVersionSuffix("http://localhost:8080/api/v1")).toBe(true);
   });
 
   it("flags loopback, LAN and link-local hosts", () => {

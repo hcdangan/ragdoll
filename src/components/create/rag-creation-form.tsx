@@ -17,6 +17,7 @@ import {
   IconUpload,
 } from "@/components/ui/icons";
 import { useSession } from "@/hooks/use-session";
+import { useNotices } from "@/components/providers/notice-provider";
 import { t } from "@/lib/i18n";
 import {
   DISTANCE_METRIC_LABEL_KEYS,
@@ -122,6 +123,10 @@ export function RagCreationForm(): ReactElement {
   };
 
   const { hasPipeline, pipeline, maskedKey, refetch } = useSession();
+  // Action results — success, failure and upload rejections — go to the global
+  // stack: the form is tall, and a banner at the top is off-screen for a user who
+  // just pressed a button at the bottom.
+  const { notify, clear } = useNotices();
   const fileInput = useRef<HTMLInputElement | null>(null);
   const hydratedFor = useRef<string | null>(null);
 
@@ -130,9 +135,6 @@ export function RagCreationForm(): ReactElement {
   const [documents, setDocuments] = useState<readonly PendingDocument[]>([]);
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [busy, setBusy] = useState<"idle" | "testing" | "creating">("idle");
-  const [notice, setNotice] = useState<
-    { readonly tone: "success" | "danger" | "info"; readonly message: string } | null
-  >(null);
   const [testResult, setTestResult] = useState<string | null>(null);
 
   const definition = PROVIDERS[form.provider];
@@ -187,9 +189,7 @@ export function RagCreationForm(): ReactElement {
       setDocuments((current) => {
         const { accepted, errors: rejected } = checkClientDocuments(current, pending);
         if (rejected.length > 0) {
-          setNotice({ tone: "danger", message: rejected.join(" ") });
-        } else {
-          setNotice(null);
+          notify({ tone: "danger", message: rejected.join(" ") });
         }
         return [...current, ...accepted];
       });
@@ -197,7 +197,7 @@ export function RagCreationForm(): ReactElement {
         fileInput.current.value = "";
       }
     },
-    [],
+    [notify],
   );
 
   const payload = useMemo(
@@ -217,12 +217,12 @@ export function RagCreationForm(): ReactElement {
   const runTest = useCallback(async () => {
     setBusy("testing");
     setErrors({});
-    setNotice(null);
+    clear();
     try {
       const result = await testConnectionAction(payload);
       if (!result.ok) {
         setErrors(result.error.fields ?? {});
-        setNotice({ tone: "danger", message: result.error.message });
+        notify({ tone: "danger", message: result.error.message });
         return;
       }
       setTestResult(
@@ -235,20 +235,20 @@ export function RagCreationForm(): ReactElement {
     } finally {
       setBusy("idle");
     }
-  }, [form.model, payload]);
+  }, [clear, form.model, notify, payload]);
 
   const submit = useCallback(async () => {
     setBusy("creating");
     setErrors({});
-    setNotice(null);
+    clear();
     try {
       const result = await createPipelineAction(payload);
       if (!result.ok) {
         setErrors(result.error.fields ?? {});
-        setNotice({ tone: "danger", message: result.error.message });
+        notify({ tone: "danger", message: result.error.message });
         return;
       }
-      setNotice({
+      notify({
         tone: "success",
         message:
           documents.length === 0
@@ -262,9 +262,9 @@ export function RagCreationForm(): ReactElement {
     } finally {
       setBusy("idle");
     }
-  }, [documents.length, payload, refetch]);
+  }, [clear, documents.length, notify, payload, refetch]);
 
-  const clear = useCallback(async () => {
+  const clearPipeline = useCallback(async () => {
     if (!window.confirm(t("session.resetConfirm"))) {
       return;
     }
@@ -272,30 +272,19 @@ export function RagCreationForm(): ReactElement {
     try {
       const result = await clearPipelineAction();
       if (!result.ok) {
-        setNotice({ tone: "danger", message: result.error.message });
+        notify({ tone: "danger", message: result.error.message });
         return;
       }
-      setForm({
-        provider: "openai",
-        baseUrl: "",
-        model: PROVIDERS.openai.defaultModel,
-        embeddingModel: PROVIDERS.openai.embeddingModels[0] ?? "text-embedding-3-small",
-        chunkSize: LIMITS.chunkSize.default,
-        chunkOverlapPercent: LIMITS.chunkOverlapPercent.default,
-        maxInputTokens: LIMITS.maxInputTokens.default,
-        distanceMetric: "cosine",
-        topK: LIMITS.topK.default,
-        retrievalMode: "context-injection",
-      });
+      setForm(defaultFormState());
       setDocuments([]);
       setApiKey("");
       setTestResult(null);
-      setNotice({ tone: "info", message: t("session.resetDone") });
+      notify({ tone: "info", message: t("session.resetDone") });
       refetch();
     } finally {
       setBusy("idle");
     }
-  }, [refetch]);
+  }, [notify, refetch]);
 
   const disabled = busy !== "idle";
 
@@ -318,12 +307,6 @@ export function RagCreationForm(): ReactElement {
           {maskedKey === null ? null : <span className="ml-1 font-mono text-xs">({maskedKey})</span>}
         </InlineNotice>
       ) : null}
-
-      {notice === null ? null : (
-        <InlineNotice tone={notice.tone}>
-          {notice.message}
-        </InlineNotice>
-      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="card p-5">
@@ -641,7 +624,7 @@ export function RagCreationForm(): ReactElement {
           className="btn-danger sm:ml-auto"
           disabled={disabled || !hasPipeline}
           onClick={() => {
-            void clear();
+            void clearPipeline();
           }}
         >
           <IconTrash className="h-4 w-4" />

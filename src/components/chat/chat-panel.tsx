@@ -2,10 +2,19 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useCallback, useMemo, useRef, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type RefObject,
+} from "react";
 
 import { CatAvatar } from "@/components/brand/logo";
 import { IconAlert, IconQuote, IconRefresh, IconSend, IconSpinner, IconStop } from "@/components/ui/icons";
+import { useNotices, type NoticeInput } from "@/components/providers/notice-provider";
 import { resetChatAction } from "@/app/actions/pipeline";
 import {
   messageCitations,
@@ -56,15 +65,45 @@ const MAX_HISTORY_SENT = 10;
 const toEngineMessages = (messages: readonly RagdollUIMessage[]): readonly RagdollUIMessage[] =>
   messages.slice(-MAX_HISTORY_SENT);
 
+/**
+ * The failure notice, carrying the retry affordance the inline alert used to own.
+ *
+ * `retry` is a ref rather than the callback itself so the notice raised from
+ * `onData` — which runs before `useChat` returns `regenerate` — still calls the
+ * current one when the user presses the button.
+ */
+const chatErrorNotice = (message: string, retry: RefObject<() => void>): NoticeInput => ({
+  tone: "danger",
+  message,
+  action: (
+    <button
+      type="button"
+      className="btn-secondary text-xs"
+      onClick={() => {
+        retry.current();
+      }}
+    >
+      <IconRefresh className="h-4 w-4" />
+      {t("chat.retry")}
+    </button>
+  ),
+});
+
 export function ChatPanel(): ReactElement {
   const { canChat, hasPipeline, pipeline } = useSession();
+  // Stream failures are reported through the fixed notification stack rather than
+  // a banner above the composer: the transcript scrolls independently, and a long
+  // answer can push an inline alert out of view while the user is still reading.
+  const { notify, clear } = useNotices();
   const [input, setInput] = useState("");
   const [citations, setCitations] = useState<readonly Citation[]>([]);
   const [fallbackReason, setFallbackReason] = useState<FallbackReason | null>(null);
-  const [errorState, setErrorState] = useState<ChatErrorData | null>(null);
   const [contextWarning, setContextWarning] = useState(false);
   const [resetting, setResetting] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // The retry offered by an error notice has to survive being raised from a
+  // callback that runs before `useChat` hands back `regenerate`.
+  const retryRef = useRef<() => void>(() => undefined);
 
   const transport = useMemo(
     () =>
@@ -87,13 +126,23 @@ export function ChatPanel(): ReactElement {
         } else if (part.type === "data-fallback") {
           setFallbackReason((part.data as FallbackData).reason ?? "unsupported");
         } else if (part.type === "data-error") {
-          setErrorState(part.data as ChatErrorData);
+          notify(chatErrorNotice((part.data as ChatErrorData).message, retryRef));
         }
       },
-      onFinish: () => {
-        setErrorState(null);
-      },
     });
+
+  useEffect(() => {
+    retryRef.current = () => {
+      void regenerate();
+    };
+  }, [regenerate]);
+
+  useEffect(() => {
+    if (error === undefined) {
+      return;
+    }
+    notify(chatErrorNotice(t("chat.error", { message: error.message }), retryRef));
+  }, [error, notify]);
 
   const busy = status === "streaming" || status === "submitted";
   const maxInputTokens = pipeline?.config.maxInputTokens ?? 1024;
@@ -116,7 +165,7 @@ export function ChatPanel(): ReactElement {
     try {
       const result = await resetChatAction();
       if (!result.ok) {
-        setErrorState({ code: result.error.code, message: result.error.message });
+        notify({ tone: "danger", message: result.error.message });
         return;
       }
       setMessages([]);
@@ -126,7 +175,7 @@ export function ChatPanel(): ReactElement {
     } finally {
       setResetting(false);
     }
-  }, [setMessages]);
+  }, [notify, setMessages]);
 
   const submit = useCallback(
     (text: string, options: { readonly bypassWarning?: boolean } = {}) => {
@@ -148,11 +197,13 @@ export function ChatPanel(): ReactElement {
       setInput("");
       setCitations([]);
       setFallbackReason(null);
-      setErrorState(null);
+      // A new question retires the previous failure, exactly as the inline alert
+      // used to be cleared on send.
+      clear();
       setContextWarning(overBudget);
       void sendMessage({ text: question });
     },
-    [busy, maxInputTokens, sendMessage, transcriptTokens],
+    [busy, clear, maxInputTokens, sendMessage, transcriptTokens],
   );
 
   /** Clears the view only; the session transcript is left untouched. */
@@ -160,9 +211,9 @@ export function ChatPanel(): ReactElement {
     setMessages([]);
     setCitations([]);
     setFallbackReason(null);
-    setErrorState(null);
+    clear();
     setContextWarning(false);
-  }, [setMessages]);
+  }, [clear, setMessages]);
 
   const suggestions = [
     t("chat.empty.suggestion1"),
@@ -252,28 +303,6 @@ export function ChatPanel(): ReactElement {
                   {t("chat.contextWarning.proceed")}
                 </button>
               </div>
-            </div>
-          </div>
-        ) : null}
-
-        {errorState !== null || error !== undefined ? (
-          <div className="mt-3" role="alert">
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
-              <span className="flex items-center gap-2">
-                <IconAlert className="h-4 w-4" />
-                {errorState?.message ?? t("chat.error", { message: error?.message ?? "" })}
-              </span>
-              <button
-                type="button"
-                className="btn-ghost text-danger"
-                onClick={() => {
-                  setErrorState(null);
-                  void regenerate();
-                }}
-              >
-                <IconRefresh className="h-4 w-4" />
-                {t("chat.retry")}
-              </button>
             </div>
           </div>
         ) : null}

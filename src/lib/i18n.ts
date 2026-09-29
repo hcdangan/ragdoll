@@ -280,6 +280,9 @@ const en = {
   "a11y.progress": "{label} progress",
   "a11y.loading": "Loading",
   "a11y.errorSummary": "Form errors",
+
+  "notice.region": "Notifications",
+  "notice.dismiss": "Dismiss notification",
 } as const;
 
 export type TranslationKey = keyof typeof en;

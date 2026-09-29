@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { PrimaryNav } from "@/components/layout/primary-nav";
+import { NoticeProvider } from "@/components/providers/notice-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ThemeProvider, themeBootstrapScript } from "@/components/providers/theme-provider";
 import { t } from "@/lib/i18n";
@@ -72,11 +73,15 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
         </a>
         <ThemeProvider>
           <QueryProvider>
-            <PrimaryNav />
-            <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
-              {children}
-            </main>
-            <SiteFooter />
+            {/* Wraps the shell so a notice raised on any route renders in the fixed
+                viewport stack instead of being scrolled out of sight. */}
+            <NoticeProvider>
+              <PrimaryNav />
+              <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+                {children}
+              </main>
+              <SiteFooter />
+            </NoticeProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>

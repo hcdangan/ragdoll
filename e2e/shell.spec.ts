@@ -114,4 +114,43 @@ test.describe("shell", () => {
     await page.goto("/evaluate");
     await expect(page.getByText(/Create a RAG pipeline first/i)).toBeVisible();
   });
+
+  test("a notification is visible from any scroll position and can be dismissed", async ({ page }) => {
+    await page.goto("/create");
+
+    // A rejected upload is the one notice this suite can raise without a provider:
+    // the browser-side check refuses a non-PDF before any request is made.
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "notes.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("not a pdf"),
+    });
+
+    const notice = page.getByRole("alert").filter({ hasText: "notes.txt is not a PDF file." });
+    await expect(notice).toBeVisible();
+
+    // The creation form is taller than the viewport, so the notice has to be fixed
+    // to the viewport rather than parked in the page flow near the upload control.
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    await expect(notice).toBeInViewport();
+
+    await notice.getByRole("button", { name: "Dismiss notification" }).click();
+    await expect(notice).toHaveCount(0);
+  });
+
+  test("notifications do not survive a page load", async ({ page }) => {
+    await page.goto("/create");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "notes.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("not a pdf"),
+    });
+    await expect(page.getByRole("alert").filter({ hasText: "notes.txt" })).toBeVisible();
+
+    await page.reload();
+
+    await expect(page.getByRole("region", { name: "Notifications" })).toHaveCount(0);
+  });
 });

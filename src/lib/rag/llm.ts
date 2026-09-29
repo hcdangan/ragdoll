@@ -43,6 +43,17 @@ const RETRYABLE_STATUSES: ReadonlySet<number> = new Set<number>([
   408, 409, 425, 429, 500, 502, 503, 504,
 ]);
 
+/**
+ * Appended to transport failures, where the cause is the network rather than us.
+ *
+ * A connect timeout is the one provider error a user can fix themselves, and the
+ * fix depends on where the app runs: the same URL that works from the browser can
+ * be unreachable from a hosted function.
+ */
+const CONNECTIVITY_HINT =
+  "Check the host and port, and that the machine running RAGdoll can reach the provider —" +
+  " a hosted deployment cannot reach a server on your own network.";
+
 /** Node/undici error codes that mean the socket never produced a response. */
 const TRANSPORT_ERROR_CODES: ReadonlySet<string> = new Set<string>([
   "ECONNREFUSED",
@@ -194,6 +205,18 @@ export const stripVersionSuffix = (baseUrl: string): string =>
   baseUrl.replace(/\/+$/, "").replace(/\/v1$/i, "");
 
 /**
+ * True when the base URL ends in OpenAI's `/v1` version segment.
+ *
+ * The suffix is a protocol choice, not noise to strip. A stock `ollama serve`
+ * answers both protocols, but `llama.cpp`'s `llama-server`, LM Studio and vLLM
+ * expose *only* the OpenAI-compatible routes — so a user who types
+ * `http://host:11434/v1` is telling us which surface to speak to, and silently
+ * falling back to the native paths answers a request nobody can serve.
+ * @param baseUrl Provider base URL, already trimmed of trailing slashes.
+ */
+export const hasVersionSuffix = (baseUrl: string): boolean => /\/v1$/i.test(baseUrl);
+
+/**
  * True when a URL points at the local machine or its private network.
  *
  * The hosted deployment path is the whole reason this exists: Vercel functions cannot
@@ -268,14 +291,14 @@ const composeSignal = (timeoutMs: number, outer?: AbortSignal): AbortSignal => {
 };
 
 /** Maps a `fetch` rejection to its API-facing failure, preserving the abort path. */
-const classifyRequestFailure = (error: unknown, baseUrl: string): RequestFailure => {
+const classifyRequestFailure = (error: unknown, url: string): RequestFailure => {
   if (error instanceof ResponseFormatError) {
     return { message: error.message, retryable: false, code: "provider_error" };
   }
   const name = errorName(error);
   if (name === "TimeoutError") {
     return {
-      message: `Could not reach the provider at ${baseUrl} (timed out).`,
+      message: `The provider at ${url} did not respond in time (timed out).`,
       retryable: true,
       code: "provider_unreachable",
     };
@@ -289,15 +312,22 @@ const classifyRequestFailure = (error: unknown, baseUrl: string): RequestFailure
   }
   const code = transportCode(error);
   const detail = code !== null && TRANSPORT_ERROR_CODES.has(code) ? ` (${code})` : "";
+  // The URL is included because "unreachable" is the one failure the user can act
+  // on, and only if they can see *which* address and route was attempted.
   return {
-    message: `Could not reach the provider at ${baseUrl}.${detail}`,
+    message: `Could not reach the provider at ${url}${detail}. ${CONNECTIVITY_HINT}`,
     retryable: true,
     code: "provider_unreachable",
   };
 };
 
 /** Maps a non-2xx response to its failure, calling out rejected keys. */
-const classifyStatusFailure = (status: number, detail: string, baseUrl: string): RequestFailure => {
+const classifyStatusFailure = (
+  status: number,
+  detail: string,
+  url: string,
+  nativeOllama: boolean,
+): RequestFailure => {
   const suffix = detail.length > 0 ? ` ${detail}` : "";
   if (status === 401 || status === 403) {
     return {
@@ -306,8 +336,16 @@ const classifyStatusFailure = (status: number, detail: string, baseUrl: string):
       code: "invalid_api_key",
     };
   }
+  // A 404 on a self-hosted server is nearly always the wrong surface rather than a
+  // missing model: the OpenAI-compatible routes live under `/v1`, and pointing the
+  // base URL at the bare origin is the mistake this sentence exists to end.
+  const routeHint =
+    nativeOllama && (status === 404 || status === 405)
+      ? " The server answered, so it is reachable but has no native Ollama route there;" +
+        " if it only serves the OpenAI-compatible API, end the base URL with /v1."
+      : "";
   return {
-    message: `The provider at ${baseUrl} returned HTTP ${status}.${suffix}`,
+    message: `The provider at ${url} returned HTTP ${status}.${suffix}${routeHint}`,
     retryable: RETRYABLE_STATUSES.has(status),
     code: "provider_error",
   };
@@ -490,7 +528,14 @@ export interface LlmProvider {
 export class ProviderClient implements LlmProvider {
   private readonly options: ProviderOptions;
   private readonly baseUrl: string;
-  private readonly ollama: boolean;
+  /**
+   * True when the native Ollama protocol is the right one to speak.
+   *
+   * Only for `ollama` *and* only when the base URL does not name the `/v1`
+   * surface: a `/v1` base URL means the user wants the OpenAI-compatible routes,
+   * which is the only thing llama.cpp's server offers.
+   */
+  private readonly nativeOllama: boolean;
   private readonly timeoutMs: number;
 
   constructor(options: ProviderOptions) {
@@ -502,13 +547,8 @@ export class ProviderClient implements LlmProvider {
     }
     this.options = options;
     this.baseUrl = baseUrl;
-    this.ollama = options.provider === "ollama";
+    this.nativeOllama = options.provider === "ollama" && !hasVersionSuffix(baseUrl);
     this.timeoutMs = resolveTimeoutMs(options.timeoutMs);
-  }
-
-  /** True when this client speaks the Ollama-native protocol. */
-  private get usesOllama(): boolean {
-    return this.ollama;
   }
 
   /** Origin used for native paths; the `/v1` suffix only exists for the OpenAI shim. */
@@ -517,7 +557,7 @@ export class ProviderClient implements LlmProvider {
   }
 
   private endpoint(path: string): string {
-    const root = this.usesOllama ? this.nativeBase : this.baseUrl;
+    const root = this.nativeOllama ? this.nativeBase : this.baseUrl;
     return `${root}${path}`;
   }
 
@@ -546,7 +586,7 @@ export class ProviderClient implements LlmProvider {
   ): Readonly<Record<string, unknown>> {
     const body: Record<string, unknown> = { model: this.options.model, messages, stream: false };
 
-    if (this.usesOllama) {
+    if (this.nativeOllama) {
       // Fields are copied explicitly rather than spread: `options` also carries the
       // caller's AbortSignal, which is not JSON and must never reach the wire.
       const sampling: Record<string, unknown> = {};
@@ -573,7 +613,7 @@ export class ProviderClient implements LlmProvider {
 
   private embeddingBody(input: string | readonly string[]): Readonly<Record<string, unknown>> {
     const model = this.options.embeddingModel;
-    return this.usesOllama ? { model, prompt: input } : { model, input };
+    return this.nativeOllama ? { model, prompt: input } : { model, input };
   }
 
   /**
@@ -607,7 +647,7 @@ export class ProviderClient implements LlmProvider {
     signal?: AbortSignal,
   ): Promise<RetryOutcome> {
     let last: RequestFailure = {
-      message: `Could not reach the provider at ${this.baseUrl}.`,
+      message: `Could not reach the provider at ${url}. ${CONNECTIVITY_HINT}`,
       retryable: false,
       code: "provider_unreachable",
     };
@@ -627,7 +667,7 @@ export class ProviderClient implements LlmProvider {
       try {
         response = await this.send(url, body, signal);
       } catch (error) {
-        last = classifyRequestFailure(error, this.baseUrl);
+        last = classifyRequestFailure(error, url);
         if (!last.retryable || attempt === MAX_ATTEMPTS - 1) {
           return { response: null, error: last };
         }
@@ -640,7 +680,12 @@ export class ProviderClient implements LlmProvider {
       }
 
       const raw = await readBodyText(response);
-      last = classifyStatusFailure(response.status, describeErrorBody(raw), this.baseUrl);
+      last = classifyStatusFailure(
+        response.status,
+        describeErrorBody(raw),
+        url,
+        this.nativeOllama,
+      );
       if (!last.retryable || attempt === MAX_ATTEMPTS - 1) {
         return { response: null, error: last };
       }
@@ -680,10 +725,10 @@ export class ProviderClient implements LlmProvider {
     messages: readonly ChatMessage[],
     options?: CompletionOptions,
   ): Promise<ChatCompletion> {
-    const url = this.endpoint(this.usesOllama ? "/api/chat" : "/chat/completions");
+    const url = this.endpoint(this.nativeOllama ? "/api/chat" : "/chat/completions");
     const body = this.chatBody(messages, options);
     const signal = options?.signal;
-    return this.usesOllama
+    return this.nativeOllama
       ? this.request(
           url,
           body,
@@ -716,22 +761,24 @@ export class ProviderClient implements LlmProvider {
     messages: readonly ChatMessage[],
     options?: CompletionOptions,
   ): AsyncGenerator<StreamDelta, void, undefined> {
-    const url = this.endpoint(this.usesOllama ? "/api/chat" : "/chat/completions");
+    const url = this.endpoint(this.nativeOllama ? "/api/chat" : "/chat/completions");
     const body: Readonly<Record<string, unknown>> = {
       ...this.chatBody(messages, options),
       stream: true,
-      ...(this.usesOllama ? {} : { stream_options: { include_usage: true } }),
+      ...(this.nativeOllama ? {} : { stream_options: { include_usage: true } }),
     };
     const signal = composeSignal(this.timeoutMs, options?.signal);
     let response: Response;
     try {
       response = await this.send(url, body, signal);
     } catch (error) {
-      throw toProviderError(classifyRequestFailure(error, this.baseUrl));
+      throw toProviderError(classifyRequestFailure(error, url));
     }
     if (!response.ok) {
       const detail = describeErrorBody(await readBodyText(response));
-      throw toProviderError(classifyStatusFailure(response.status, detail, this.baseUrl));
+      throw toProviderError(
+        classifyStatusFailure(response.status, detail, url, this.nativeOllama),
+      );
     }
     const stream = await openStream(response);
     if (stream === null) {
@@ -752,14 +799,14 @@ export class ProviderClient implements LlmProvider {
         const text =
           typeof value === "string" ? value : decoder.decode(value, { stream: true });
         for (const line of frames.push(text)) {
-          const payload = this.parseStreamLine(line, this.usesOllama);
+          const payload = this.parseStreamLine(line, this.nativeOllama);
           if (payload !== null) {
             yield payload;
           }
         }
       }
       for (const line of frames.flush()) {
-        const payload = this.parseStreamLine(line, this.usesOllama);
+        const payload = this.parseStreamLine(line, this.nativeOllama);
         if (payload !== null) {
           yield payload;
         }
@@ -768,7 +815,7 @@ export class ProviderClient implements LlmProvider {
       if (errorName(error) === "AbortError") {
         return;
       }
-      throw toProviderError(classifyRequestFailure(error, this.baseUrl));
+      throw toProviderError(classifyRequestFailure(error, url));
     } finally {
       reader.releaseLock();
     }
@@ -891,7 +938,7 @@ export class ProviderClient implements LlmProvider {
 
   /** One request's worth of embeddings, in the protocol this provider speaks. */
   private async embedBatch(batch: readonly string[]): Promise<number[][]> {
-    if (this.usesOllama) {
+    if (this.nativeOllama) {
       const vectors: number[][] = [];
       for (const text of batch) {
         vectors.push(

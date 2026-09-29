@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement } from "re
 import { runEvaluationAction } from "@/app/actions/evaluate";
 import { InlineNotice, SectionHeading } from "@/components/ui/feedback";
 import { IconAlert, IconGauge, IconRefresh, IconSpinner } from "@/components/ui/icons";
+import { useNotices } from "@/components/providers/notice-provider";
 import { useSession } from "@/hooks/use-session";
 import { t } from "@/lib/i18n";
 import { EVALUATION_METRICS, type EvaluationMetric, type EvaluationReport, type MetricResult } from "@/lib/types";
@@ -39,27 +40,33 @@ const scoreTone = (score: MetricResult["score"]): string => {
 
 export function EvaluationDashboard(): ReactElement {
   const { hasPipeline, canEvaluate, pipeline } = useSession();
+  // A failed run is reported through the fixed notification stack: the dashboard
+  // is long, and the run button sits above a table and an arbitrary number of
+  // samples, so an inline banner is not reliably on screen.
+  const { notify } = useNotices();
   const [report, setReport] = useState<EvaluationReport | null>(null);
   const [running, setRunning] = useState(false);
   const [revealed, setRevealed] = useState<number>(EVALUATION_METRICS.length);
   const [sampleCount, setSampleCount] = useState<number>(4);
-  const [error, setError] = useState<string | null>(null);
 
   const run = useCallback(async () => {
     setRunning(true);
-    setError(null);
     setRevealed(0);
     try {
       const result = await runEvaluationAction({ sampleCount });
       if (!result.ok) {
-        setError(result.error.message);
+        notify({
+          tone: "danger",
+          title: t("evaluate.title"),
+          message: t("evaluate.failed", { message: result.error.message }),
+        });
         return;
       }
       setReport(result.data);
     } finally {
       setRunning(false);
     }
-  }, [sampleCount]);
+  }, [notify, sampleCount]);
 
   // Rows are revealed one at a time once a report lands, so the table fills in as
   // a visible sequence rather than snapping from "no data" to eight numbers.
@@ -178,12 +185,6 @@ export function EvaluationDashboard(): ReactElement {
           <p className="field-hint mt-3">{t("evaluate.multimodalAvailable")}</p>
         ) : null}
       </div>
-
-      {error !== null ? (
-        <InlineNotice tone="danger" title={t("evaluate.title")}>
-          {t("evaluate.failed", { message: error })}
-        </InlineNotice>
-      ) : null}
 
       <div className="card overflow-hidden">
         <table className="w-full text-left text-sm">
