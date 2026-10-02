@@ -32,6 +32,21 @@ test.describe("shell", () => {
     await expect(footer.getByRole("link", { name: /Read the license/i })).toBeVisible();
   });
 
+  test("home page credits the Asian Institute of Management with a real logo", async ({ page }) => {
+    await page.goto("/");
+
+    const credit = page.getByRole("region", { name: /Asian Institute of Management/i });
+    await expect(credit).toContainText(/submitted as a mini project/i);
+
+    // `naturalWidth` proves the vendored SVG was served and decoded, not just that
+    // an <img> element exists with a broken src.
+    const logo = credit.getByRole("img", { name: /Asian Institute of Management logo/i });
+    await expect(logo).toBeVisible();
+    expect(
+      await logo.evaluate((element) => (element as HTMLImageElement).naturalWidth),
+    ).toBeGreaterThan(0);
+  });
+
   test("evaluate and chat are announced as disabled without a pipeline", async ({ page }) => {
     await page.goto("/");
     await openNav(page);

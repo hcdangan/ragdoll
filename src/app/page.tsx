@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   description: t("app.description"),
 };
 
+/** Third-party institutional mark, vendored under `public/logos/`. */
+const AIM_LOGO_SRC = "/logos/aim.svg";
+
 const FEATURES = [
   { icon: IconWand, titleKey: "home.feature.pipeline.title", bodyKey: "home.feature.pipeline.body" },
   { icon: IconGauge, titleKey: "home.feature.evaluate.title", bodyKey: "home.feature.evaluate.body" },
@@ -149,6 +152,30 @@ export default function HomePage(): ReactElement {
           >
             {t("home.license.link")}
           </Link>
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="aim-heading"
+        className="card flex flex-col items-start gap-5 p-5 sm:flex-row sm:items-center"
+      >
+        {/* Third-party mark: it keeps its own colours, and sits on white so the
+            navy wordmark stays legible in the dark theme. */}
+        <span className="flex h-24 w-40 shrink-0 items-center justify-center rounded-xl bg-white p-2 ring-1 ring-line">
+          <Image
+            src={AIM_LOGO_SRC}
+            alt={t("home.aim.logoAlt")}
+            width={2361}
+            height={1695}
+            unoptimized
+            className="h-full w-full object-contain"
+          />
+        </span>
+        <div className="min-w-0">
+          <h2 id="aim-heading" className="text-base font-semibold">
+            {t("home.aim.title")}
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-ink-muted">{t("home.aim.body")}</p>
         </div>
       </section>
     </div>

@@ -79,8 +79,11 @@ const en = {
     "Next.js 15 App Router and React 19 on the front end, TanStack Query for server state, a TypeScript retrieval and evaluation engine running inside the Next.js server, and the Vercel AI SDK for streaming.",
   "home.license.title": "License",
   "home.license.body":
-    "RAGdoll is released under the MIT License. Copyright (c) 2026 Harley Dangan. Submitted as a mini project to the Asian Institute of Management.",
+    "RAGdoll is released under the MIT License. Copyright (c) 2026 Harley Dangan.",
   "home.license.link": "Read the license",
+  "home.aim.title": "Asian Institute of Management",
+  "home.aim.body": "RAGdoll is submitted as a mini project to the Asian Institute of Management.",
+  "home.aim.logoAlt": "Asian Institute of Management logo",
 
   "create.title": "RAG Creation",
   "create.subtitle": "Configure the pipeline. Every field is validated before the index is built.",

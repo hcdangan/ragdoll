@@ -68,6 +68,7 @@ src/components/     UI, chat, creation form, evaluation dashboard
 src/middleware.ts   mints and verifies the signed session handle
 e2e/                Playwright specs (shell + full pipeline journey)
 public/brand/       logo and derived cat avatar / icons
+public/logos/       third-party marks (Asian Institute of Management)
 tools/              brand asset pipeline (logo → avatar, icons)
 scripts/            E2E PDF fixture generator
 ```
@@ -111,7 +112,14 @@ Server Actions, the streaming route handler and `useChat`.
 | `RAGDOLL_DEV_PROVIDER` | `1` swaps in the deterministic offline provider. Never set on a deployment that answers real questions. |
 | `RAGDOLL_DISABLE_GUARDRAILS` | `1` disables the jailbreak / prompt-injection input filter, for investigating a false positive. |
 
+## Submitted to
+
+<p align="center">
+  <img src="public/logos/aim.svg" alt="Asian Institute of Management" width="220">
+</p>
+
+RAGdoll is submitted as a mini project to the **Asian Institute of Management**.
+
 ## License
 
-MIT — see [LICENSE](LICENSE). © 2026 Harley Dangan. Submitted as a mini project to
-the Asian Institute of Management.
+MIT — see [LICENSE](LICENSE). © 2026 Harley Dangan.
