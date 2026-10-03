@@ -49,6 +49,8 @@ import type { ChatTurn, SessionState, UploadedDocument } from "./types";
 const KV_PREFIX = "ragdoll:session:";
 /** KV TTL is one minute longer than the sliding window so it cannot expire mid-request. */
 const KV_TTL_SECONDS = Math.ceil(LIMITS.sessionTtlMs / 1000) + 60;
+/** Per-request ceiling of the Upstash REST API on free and pay-as-you-go plans. */
+const KV_VALUE_LIMIT_BYTES = 10 * 1024 * 1024;
 
 interface MemoryEntry {
   session: SessionState;
@@ -153,29 +155,36 @@ interface StoredSession {
 const kvKey = (id: string): string => `${KV_PREFIX}${id}`;
 
 const kvSet = async (session: SessionState): Promise<void> => {
-  await kvCommand([
-    "SET",
-    kvKey(session.id),
-    JSON.stringify({
-      id: session.id,
-      pipeline: session.pipeline,
-      documents: session.documents.map((document) => ({
-        id: document.id,
-        name: document.name,
-        sizeBytes: document.sizeBytes,
-        base64: Buffer.from(document.bytes).toString("base64"),
-        pageCount: document.pageCount,
-        chunkCount: document.chunkCount,
-        imageCount: document.imageCount,
-      })),
-      chat: session.chat,
-      apiKey: session.apiKey,
-      createdAt: session.createdAt,
-      updatedAt: session.updatedAt,
-    } satisfies StoredSession),
-    "EX",
-    KV_TTL_SECONDS,
-  ]);
+  const value = JSON.stringify({
+    id: session.id,
+    pipeline: session.pipeline,
+    documents: session.documents.map((document) => ({
+      id: document.id,
+      name: document.name,
+      sizeBytes: document.sizeBytes,
+      base64: Buffer.from(document.bytes).toString("base64"),
+      pageCount: document.pageCount,
+      chunkCount: document.chunkCount,
+      imageCount: document.imageCount,
+    })),
+    chat: session.chat,
+    apiKey: session.apiKey,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+  } satisfies StoredSession);
+
+  // Upstash rejects a request body over 10 MB on its free and pay-as-you-go plans,
+  // and the app's own upload allowance (15 MB of PDFs, ~20 MB once base64-encoded)
+  // can exceed that. Skipping with a warning is clearer than a failing request on
+  // every write, and it names the consequence: this session stops being shared.
+  if (Buffer.byteLength(value, "utf8") > KV_VALUE_LIMIT_BYTES) {
+    console.warn(
+      "[ragdoll] session is larger than the shared store accepts; it now lives only on this instance.",
+    );
+    return;
+  }
+
+  await kvCommand(["SET", kvKey(session.id), value, "EX", KV_TTL_SECONDS]);
 };
 
 const kvGet = async (id: string): Promise<SessionState | null> => {
@@ -218,9 +227,16 @@ export interface ResolvedSession {
 /**
  * Loads the session named by a request's signed token.
  * @param token Signed token from `readSessionToken`.
+ * @param options.touch When false the read does not extend the sliding window. The
+ *   status poll behind the header countdown uses this: a poll is the app observing
+ *   the session, not the user using it, so it must report the real remaining
+ *   lifetime instead of silently resetting it every few seconds.
  * @returns The session, or null when the token is absent, forged, or unknown.
  */
-export const loadSession = async (token: string | null): Promise<ResolvedSession | null> => {
+export const loadSession = async (
+  token: string | null,
+  options: { readonly touch?: boolean } = {},
+): Promise<ResolvedSession | null> => {
   if (token === null) {
     return null;
   }
@@ -229,13 +245,16 @@ export const loadSession = async (token: string | null): Promise<ResolvedSession
     return null;
   }
 
+  const touch = options.touch ?? true;
   const now = Date.now();
   sweep(now);
 
   const cached = memory.get(id);
   if (cached !== undefined && cached.expiresAt > now) {
-    // Refresh the sliding window without re-writing KV on every read.
-    memory.set(id, { session: cached.session, expiresAt: now + LIMITS.sessionTtlMs });
+    if (touch) {
+      // Refresh the sliding window without re-writing KV on every read.
+      memory.set(id, { session: cached.session, expiresAt: now + LIMITS.sessionTtlMs });
+    }
     return { session: cached.session, restored: false };
   }
 
@@ -243,7 +262,10 @@ export const loadSession = async (token: string | null): Promise<ResolvedSession
     try {
       const fromKv = await kvGet(id);
       if (fromKv !== null) {
-        memory.set(id, { session: fromKv, expiresAt: now + LIMITS.sessionTtlMs });
+        // An untouched read restores the entry for the lifetime it already had, so
+        // the countdown and the store agree about when the session dies.
+        const expiry = Math.max(now, (touch ? now : fromKv.updatedAt + LIMITS.sessionTtlMs));
+        memory.set(id, { session: fromKv, expiresAt: expiry });
         return { session: fromKv, restored: true };
       }
     } catch (error) {
@@ -263,10 +285,14 @@ export const loadSession = async (token: string | null): Promise<ResolvedSession
  * it, and every lookup misses. That mismatch is what made a freshly built pipeline
  * invisible one navigation later.
  * @param token Signed token from `readSessionToken`.
+ * @param options.touch Passed through to `loadSession`; see its note on polling.
  * @returns The existing session, or a new one carrying the request's id.
  */
-export const adoptSession = async (token: string | null): Promise<ResolvedSession> => {
-  const resolved = await loadSession(token);
+export const adoptSession = async (
+  token: string | null,
+  options: { readonly touch?: boolean } = {},
+): Promise<ResolvedSession> => {
+  const resolved = await loadSession(token, options);
   if (resolved !== null) {
     return resolved;
   }

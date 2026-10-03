@@ -46,7 +46,11 @@ export async function GET(): Promise<NextResponse> {
   // Adopts the id middleware minted rather than inventing one: the browser's
   // cookie already names this session, so the two must agree or every later
   // lookup misses. Middleware provisions the cookie, so nothing is written here.
-  const { session } = await adoptSession(token);
+  //
+  // Untouched on purpose: this poll feeds the header countdown, and a poll that
+  // extended the window would report a full 15 minutes forever — the countdown
+  // could never tick, and the session would never expire while a tab was open.
+  const { session } = await adoptSession(token, { touch: false });
 
   const status = describeApiKey(session);
   const pipeline = toPipelineSummary(session);

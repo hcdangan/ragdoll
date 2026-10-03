@@ -182,7 +182,10 @@ export function ChatPanel(): ReactElement {
   const submit = useCallback(
     (text: string, options: { readonly bypassWarning?: boolean } = {}) => {
       const question = text.trim();
-      if (question.length === 0 || busy) {
+      // `canChat` belongs in the guard, not only on the input's `disabled`: the
+      // suggestion chips are buttons, and clicking one used to send a question
+      // through a pipeline that does not exist yet.
+      if (question.length === 0 || busy || !canChat) {
         return;
       }
       const overBudget = exceedsContextWindow(
@@ -205,7 +208,7 @@ export function ChatPanel(): ReactElement {
       setContextWarning(overBudget);
       void sendMessage({ text: question });
     },
-    [busy, clear, maxInputTokens, sendMessage, transcriptTokens],
+    [busy, canChat, clear, maxInputTokens, sendMessage, transcriptTokens],
   );
 
   /** Clears the view only; the session transcript is left untouched. */
@@ -245,6 +248,10 @@ export function ChatPanel(): ReactElement {
                     <button
                       type="button"
                       className="btn-secondary text-xs"
+                      // Disabled, not hidden: the prompt is still worth reading
+                      // before the pipeline exists, it just cannot be sent yet.
+                      disabled={!canChat || busy}
+                      title={canChat ? undefined : t("chat.requiresPipeline")}
                       onClick={() => {
                         submit(suggestion);
                       }}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 
 import { IconDatabase, IconLock } from "@/components/ui/icons";
 import { useSession } from "@/hooks/use-session";
@@ -9,15 +9,20 @@ import { t } from "@/lib/i18n";
 /**
  * Session status pill.
  *
- * Shows the two facts a user needs to trust the app with an API key: how long
- * the sliding window has left, and whether anything is indexed. The countdown
- * ticks locally from the server-reported expiry so it stays accurate without
- * polling.
+ * Shows the two facts a user needs to trust the app with an API key: how long the
+ * sliding window has left, and whether anything is indexed.
+ *
+ * The countdown ticks locally against the absolute deadline the snapshot reported
+ * (`expiresAt`), so it moves every second without polling, and any activity that
+ * extends the window shows up as the deadline jumping forward on the next poll.
  */
 
 export function SessionPill(): ReactElement {
   const { pipeline, expiresAt, hasPipeline, snapshot, refetch } = useSession();
   const [now, setNow] = useState(() => Date.now());
+  // One refetch per deadline: without this, a server that kept reporting an
+  // expired session would be polled once a second for as long as the tab was open.
+  const askedFor = useRef<number | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -29,9 +34,15 @@ export function SessionPill(): ReactElement {
   }, []);
 
   useEffect(() => {
-    if (expiresAt !== null && expiresAt - now <= 0) {
-      refetch();
+    if (expiresAt === null || expiresAt - now > 0) {
+      askedFor.current = null;
+      return;
     }
+    if (askedFor.current === expiresAt) {
+      return;
+    }
+    askedFor.current = expiresAt;
+    refetch();
   }, [expiresAt, now, refetch]);
 
   const remaining =

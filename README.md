@@ -29,6 +29,47 @@ Ragas-style metrics, and answers questions with page-level citations.
 - **Nothing on disk** — the pipeline, PDFs, citations and chat live server-side in
   the session (15-minute sliding TTL) and are dropped when it expires.
 
+## Tech stack
+
+<p align="center">
+  <img src="https://cdn.simpleicons.org/nextdotjs/094454" alt="Next.js" title="Next.js" height="34">
+  &nbsp;
+  <img src="https://cdn.simpleicons.org/react/094454" alt="React" title="React" height="34">
+  &nbsp;
+  <img src="https://cdn.simpleicons.org/typescript/094454" alt="TypeScript" title="TypeScript" height="34">
+  &nbsp;
+  <img src="https://cdn.simpleicons.org/tailwindcss/094454" alt="Tailwind CSS" title="Tailwind CSS" height="34">
+  &nbsp;
+  <img src="https://cdn.simpleicons.org/reactquery/094454" alt="TanStack Query" title="TanStack Query" height="34">
+  &nbsp;
+  <img src="https://cdn.simpleicons.org/zod/094454" alt="Zod" title="Zod" height="34">
+</p>
+<p align="center">
+  <img src="https://cdn.simpleicons.org/vitest/094454" alt="Vitest" title="Vitest" height="34">
+  &nbsp;
+  <img src="https://cdn.simpleicons.org/vercel/094454" alt="Vercel AI SDK" title="Vercel AI SDK" height="34">
+  &nbsp;
+  <img src="https://cdn.simpleicons.org/nodedotjs/094454" alt="Node.js" title="Node.js" height="34">
+  &nbsp;
+  <img src="https://cdn.simpleicons.org/pnpm/094454" alt="pnpm" title="pnpm" height="34">
+  &nbsp;
+  <img src="https://cdn.simpleicons.org/githubactions/094454" alt="GitHub Actions" title="GitHub Actions" height="34">
+</p>
+
+| Layer | Choice |
+| --- | --- |
+| Language | TypeScript, strict — no `any` anywhere |
+| Framework | Next.js 15 App Router, React 19 (Server Components by default) |
+| Styling | Tailwind CSS 3 — six-colour brand palette, light and dark themes |
+| Server state | TanStack Query |
+| Streaming | Vercel AI SDK v5 data stream protocol, consumed with `useChat` |
+| Retrieval | In-process typed-array vector index: cosine, dot product or euclidean |
+| PDF parsing | `unpdf` (PDF.js compiled to WebAssembly), sandboxed in-process |
+| Validation | Zod schemas shared by the creation form and the Server Action |
+| Testing | Vitest (unit + in-process engine integration), Playwright (E2E) |
+| CI | GitHub Actions: lint, typecheck, test, build, `pnpm audit`, CodeQL |
+| Hosting | Vercel from the repository root; Vercel KV / Upstash for the session store |
+
 ## Architecture
 
 ```

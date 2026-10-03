@@ -11,13 +11,26 @@ export const LIMITS = {
   chunkOverlapPercent: { min: 10, max: 20, step: 1, default: 10 },
   maxInputTokens: { min: 256, max: 4096, step: 32, default: 1024 },
   topK: { min: 0, max: 100, step: 1, default: 5 },
-  files: { maxCount: 3, maxFileBytes: 2 * 1024 * 1024, maxTotalBytes: 6 * 1024 * 1024 },
+  files: {
+    maxCount: 3,
+    // 5 MB per file, 15 MB per session — three files at the per-file ceiling. The
+    // Server Action body limit and every piece of upload copy derive from these,
+    // so moving the ceiling stays a one-line change.
+    maxFileBytes: 5 * 1024 * 1024,
+    maxTotalBytes: 15 * 1024 * 1024,
+  },
   sessionTtlMs: 15 * 60 * 1000,
   streamingTimeoutMs: 60_000,
 } as const;
 
 export const FALLBACK_ANSWER = "Sorry, I don't know the answer to that.";
 export const GROUNDEDNESS_THRESHOLD = 0.5;
+
+/**
+ * Formats a byte count as whole megabytes, for upload copy.
+ * @param bytes Byte count, e.g. `LIMITS.files.maxFileBytes`.
+ */
+export const megabytes = (bytes: number): string => `${Math.round(bytes / (1024 * 1024))} MB`;
 
 export interface SliderSpec {
   readonly min: number;

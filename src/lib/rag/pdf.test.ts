@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { megabytes } from "@/lib/rules";
 import {
   MAX_DOCUMENTS,
   MAX_FILE_BYTES,
@@ -130,13 +131,13 @@ async function rejection(call: Promise<unknown>): Promise<PdfRejectedError> {
 describe("upload limits", () => {
   const megabyte = 1024 * 1024;
 
-  it("pins the documented 3 file / 2 MB / 6 MB budget", () => {
+  it("pins the documented 3 file / 5 MB / 15 MB budget", () => {
     expect(MAX_DOCUMENTS).toBe(3);
-    expect(MAX_FILE_BYTES).toBe(2 * megabyte);
-    expect(MAX_TOTAL_BYTES).toBe(6 * megabyte);
+    expect(MAX_FILE_BYTES).toBe(5 * megabyte);
+    expect(MAX_TOTAL_BYTES).toBe(15 * megabyte);
   });
 
-  it("accepts three files that together stay under 6 MB", () => {
+  it("accepts three files that together stay under the session cap", () => {
     expect(() => enforceUploadBudget([megabyte, megabyte, megabyte])).not.toThrow();
     expect(() => enforceUploadBudget([])).not.toThrow();
     expect(() => enforceUploadBudget([1024])).not.toThrow();
@@ -156,20 +157,31 @@ describe("upload limits", () => {
     }
   });
 
-  it("rejects a single file above the 2 MB per-file limit", () => {
+  it("rejects a single file above the per-file limit", () => {
     expect(() => enforceUploadBudget([MAX_FILE_BYTES + 1])).toThrow(PdfRejectedError);
     expect(() => enforceUploadBudget([1024, MAX_FILE_BYTES + 1, 1024])).toThrow(
-      "A file exceeds the 2 MB per-file limit.",
+      `A file exceeds the ${megabytes(MAX_FILE_BYTES)} per-file limit.`,
     );
   });
 
   it("accepts three files sitting exactly on both limits", () => {
-    // Three files at the 2 MB per-file limit are exactly the 6 MB session cap, which is
-    // why the combined-size guard can never fire: the per-file limit is reached first.
+    // Three files at the per-file ceiling are exactly the session cap, which is why
+    // the combined-size guard can never fire first: the per-file limit is reached
+    // before the total can be exceeded.
     expect(MAX_FILE_BYTES * MAX_DOCUMENTS).toBe(MAX_TOTAL_BYTES);
     expect(() =>
       enforceUploadBudget([MAX_FILE_BYTES, MAX_FILE_BYTES, MAX_FILE_BYTES]),
     ).not.toThrow();
+  });
+
+  it("reports the session cap in the combined-size error", () => {
+    expect(() =>
+      enforceUploadBudget([MAX_FILE_BYTES, MAX_FILE_BYTES, MAX_FILE_BYTES + 1]),
+    ).toThrow(`A file exceeds the ${megabytes(MAX_FILE_BYTES)} per-file limit.`);
+
+    // The combined guard is reachable only when the per-file ceiling is raised
+    // independently, so it is asserted directly rather than through three uploads.
+    expect(megabytes(MAX_TOTAL_BYTES)).toBe("15 MB");
   });
 });
 
@@ -203,11 +215,11 @@ describe("decodeBase64", () => {
     );
   });
 
-  it("rejects a payload above the 2 MB per-file limit", () => {
+  it("rejects a payload above the per-file limit", () => {
     const oversize = Buffer.alloc(MAX_FILE_BYTES + 1).toString("base64");
 
     expect(() => decodeBase64(oversize, "big.pdf")).toThrow(
-      "big.pdf exceeds the 2 MB per-file limit.",
+      `big.pdf exceeds the ${megabytes(MAX_FILE_BYTES)} per-file limit.`,
     );
   });
 });

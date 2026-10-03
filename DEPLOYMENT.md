@@ -75,7 +75,7 @@ curl -s https://<deployment>/api/session | jq
 
 The `__Host-ragdoll-sid` cookie carries an opaque, HMAC-signed **session id** and
 nothing else, so its size is the same for an empty session as for one holding the
-full 6 MB upload allowance. Everything else lives server-side:
+full 15 MB upload allowance. Everything else lives server-side:
 
 | Layer | Holds | Survives |
 | --- | --- | --- |
@@ -90,9 +90,20 @@ The vector index itself is **not** mirrored to KV; it is rebuilt from the PDF by
 session still holds, which is why the uploads travel in the KV value. A cold instance
 therefore costs one embedding pass, not a re-upload.
 
-Upstash's per-request ceiling is 10 MB on the free and pay-as-you-go plans. A
-worst-case session (three 2 MB PDFs base64-encoded, plus chat history) lands around
-8 MB, which fits — but raising the upload limits in `src/lib/rules.ts` would not.
+### Upload ceilings versus platform limits
+
+The app's own limits are 5 MB per PDF and 15 MB per session (`LIMITS.files` in
+`src/lib/rules.ts`). Two platform ceilings sit below that, and both are quiet failures
+rather than errors, so raise them deliberately:
+
+| Limit | Value | Consequence |
+| --- | --- | --- |
+| Vercel Function request body | 4.5 MB | A Server Action POST larger than this is rejected by the platform, so on Vercel an upload is realistically capped at ~3 MB of PDF bytes (base64 inflates by a third) regardless of `bodySizeLimit` in `next.config.ts`. Self-host, or upload straight to blob storage, to use the full allowance. |
+| Upstash per-request value | 10 MB on free/pay-as-you-go | A session whose base64 PDFs exceed this cannot be mirrored to KV. The write is skipped with a warning and the session lives only on the instance that created it — which is exactly the multi-instance failure KV exists to prevent. |
+
+The in-process session always holds the full allowance; only the shared mirror is
+bounded by these. Raising the upload limit beyond what KV can store turns a
+cross-instance session into a per-instance one.
 
 ## 6. Region alignment
 

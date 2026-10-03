@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { LIMITS } from "@/lib/rules";
+import { t } from "@/lib/i18n";
+import { LIMITS, megabytes } from "@/lib/rules";
 import {
   base64ByteLength,
   checkClientDocuments,
@@ -122,7 +123,7 @@ describe("validatePipelineForm", () => {
     expect(result.config).toBeNull();
   });
 
-  it("accepts exactly the 6 MB session allowance", () => {
+  it("accepts exactly the session allowance: three files at the per-file ceiling", () => {
     const result = validatePipelineForm(
       form({
         documents: [
@@ -150,7 +151,7 @@ describe("validatePipelineForm", () => {
     // The schema rejects it before the policy pass; the creation form therefore
     // sets the human-readable message from the file picker's own check.
     expect(result.config).toBeNull();
-    expect(Object.values(result.errors).join(" ")).toMatch(/2 MB|2 MB per-file/);
+    expect(Object.values(result.errors).join(" ")).toContain(megabytes(LIMITS.files.maxFileBytes));
   });
 
   it("normalises sliders to the step grid", () => {
@@ -211,13 +212,15 @@ describe("checkClientDocuments", () => {
       document({ id: "d", name: "d.pdf" }),
     ]);
     expect(result.accepted).toHaveLength(1);
-    expect(result.errors).toContain("You can upload at most 3 PDFs.");
+    expect(result.errors).toContain(
+      t("documents.tooMany", { count: LIMITS.files.maxCount }),
+    );
   });
 
   it("enforces the per-file ceiling", () => {
     const result = checkClientDocuments([], [
       document({ sizeBytes: LIMITS.files.maxFileBytes + 1 }),
     ]);
-    expect(result.errors[0]).toContain("2 MB");
+    expect(result.errors[0]).toContain(megabytes(LIMITS.files.maxFileBytes));
   });
 });

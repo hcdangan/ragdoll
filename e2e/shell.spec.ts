@@ -61,6 +61,22 @@ test.describe("shell", () => {
     await expect(chat).toHaveAttribute("aria-disabled", "true");
   });
 
+  test("chat prompts cannot be sent before a pipeline exists", async ({ page }) => {
+    await page.goto("/chat");
+
+    // The empty-state suggestion chips are buttons, and they used to submit a
+    // question through a pipeline that does not exist yet.
+    const prompts = page.locator("main ul li button");
+    const count = await prompts.count();
+    expect(count).toBeGreaterThan(0);
+    for (let index = 0; index < count; index += 1) {
+      await expect(prompts.nth(index)).toBeDisabled();
+    }
+
+    await expect(page.getByLabel(/Ask something about your documents/i)).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Send$/ })).toBeDisabled();
+  });
+
   test("can navigate to the creation workspace", async ({ page }) => {
     await page.goto("/");
     await openNav(page);

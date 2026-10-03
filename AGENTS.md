@@ -32,7 +32,7 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
 ### API Bridge & Data Flow
 - Server Action Wrapping: Each non-streaming RAG operation (e.g., testConnection, createPipeline, runEvaluation) corresponds to a Server Action. The action calls the pipeline directly, translates its failures into the app's error vocabulary (`src/lib/pipeline/engine-errors.ts`), and returns clean TypeScript types to the component.
 - Streaming Exception: Server Actions cannot stream responses to the browser. Streaming chat MUST use a Next.js Route Handler (`app/api/chat/route.ts`) that consumes the pipeline's typed `StreamEvent` generator and re-emits it via the Vercel AI SDK Data Stream Protocol.
-- Session Store: Server-side in-memory store keyed by a signed session cookie (`__Host-ragdoll-sid`). TTL 15 minutes, sliding — refreshed on any Server Action or Route Handler call. On Vercel (multi-instance), use Vercel KV or Upstash Redis; Function instances do not share memory. After expiry, the pipeline, uploaded PDFs, API key, and chat history are purged.
+- Session Store: Server-side in-memory store keyed by a signed session cookie (`__Host-ragdoll-sid`). TTL 15 minutes, sliding — extended by any state-changing call (Server Actions, the chat route). The `/api/session` status poll reads without extending, so the header countdown reports the real remaining lifetime instead of resetting itself every few seconds. On Vercel (multi-instance), use Vercel KV or Upstash Redis; Function instances do not share memory. After expiry, the pipeline, uploaded PDFs, API key, and chat history are purged.
 - Index Rebuild: The vector index is in-process and is not mirrored to KV. A cold instance rebuilds it from the PDF bytes the session still holds, which is why uploads travel with the session.
 - Type Synchronisation: Not applicable — there is no cross-language boundary to keep in sync. The pipeline and its callers share one TypeScript type graph.
 
@@ -99,7 +99,7 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
 #### RAG Creation
 - Allows the user to input/select the following fields:
 - Everything is stored in the user's session. Nothing is stored on disk.
-- Session TTL: 15 minutes of inactivity. Sliding window refreshed on any Server Action or Route Handler call. After expiry, the pipeline, PDFs, API key, and chat history are purged server-side.
+- Session TTL: 15 minutes of inactivity. The window slides on state-changing calls (Server Actions, chat turns) and not on the `/api/session` status poll, so the countdown in the header ticks in real time and reaches zero exactly when the session is purged. After expiry, the pipeline, PDFs, API key, and chat history are purged server-side.
 - Inform the user that everything is stored in the session and nothing is stored on disk.
 
 ##### Provider 
@@ -159,8 +159,9 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
   - An interface where a user can add or remove PDF files.
     - Only PDF files are supported. 
     - Maximum of 3 files in total.
-    - Maximum of 2 megabytes per file.
-    - Maximum combined upload size: 6 MB per session.
+    - Maximum of 5 megabytes per file.
+    - Maximum combined upload size: 15 MB per session — three files at the per-file ceiling.
+    - The ceilings live in `LIMITS.files` (`src/lib/rules.ts`); the sandbox, the form copy and the Server Action body limit all derive from them, so changing a limit is a one-line edit.
 
 ##### Chunk Size
   - A slider that represents a value range between 128 to 2048 and by increments or decrements of 32. Default is 512.

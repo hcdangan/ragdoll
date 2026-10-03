@@ -13,7 +13,7 @@ import { SESSION_COOKIE_DEV, SESSION_COOKIE_PROD, SESSION_HEADER } from "./sessi
  *
  * The cookie carries a **session id, not session state**. An earlier design sealed
  * the whole session — including uploaded PDF bytes — into the cookie, which cannot
- * work: the 6 MB session limit becomes ~8 MB of base64 against a ~4 KB cookie
+ * work: the 15 MB session limit becomes ~20 MB of base64 against a ~4 KB cookie
  * budget, so the browser silently ended up with no session at all and everything
  * degraded to whichever Function instance held the memory. The id is signed, so it
  * cannot be forged, and the state lives server-side where AGENTS.md puts it.

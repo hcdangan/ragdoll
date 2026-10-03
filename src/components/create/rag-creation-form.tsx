@@ -27,7 +27,7 @@ import {
   RETRIEVAL_MODE_LABEL_KEYS,
   SIMILARITY_HINTS,
 } from "@/lib/providers";
-import { LIMITS, computeOverlapTokens } from "@/lib/rules";
+import { LIMITS, computeOverlapTokens, megabytes } from "@/lib/rules";
 import {
   DISTANCE_METRICS,
   RETRIEVAL_MODES,
@@ -461,7 +461,13 @@ export function RagCreationForm(): ReactElement {
                 <IconFile className="h-4 w-4" />
                 {t("documents.browse")}
               </button>
-              <p className="field-hint mt-2">{t("documents.limits")}</p>
+              <p className="field-hint mt-2">
+                {t("documents.limits", {
+                  count: LIMITS.files.maxCount,
+                  perFile: megabytes(LIMITS.files.maxFileBytes),
+                  total: megabytes(LIMITS.files.maxTotalBytes),
+                })}
+              </p>
             </div>
 
             {errors.documents === undefined ? null : (
@@ -506,7 +512,7 @@ export function RagCreationForm(): ReactElement {
 
             <p className="field-hint">
               {t("session.documents", { count: documents.length })} ·{" "}
-              {(totalBytes / 1024 / 1024).toFixed(2)} MB / 6 MB
+              {(totalBytes / 1024 / 1024).toFixed(2)} MB / {megabytes(LIMITS.files.maxTotalBytes)}
             </p>
           </div>
         </section>

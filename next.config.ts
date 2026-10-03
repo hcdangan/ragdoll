@@ -35,9 +35,10 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   experimental: {
-    // Server Actions receive PDF uploads; 6 MB of payload plus multipart
-    // overhead has to fit inside the body limit.
-    serverActions: { bodySizeLimit: "8mb" },
+    // Server Actions receive PDF uploads as base64 inside JSON: the 15 MB session
+    // allowance (`LIMITS.files.maxTotalBytes`) inflates by a third on the wire, so
+    // the body limit is sized above that with headroom for multipart overhead.
+    serverActions: { bodySizeLimit: "24mb" },
   },
   async headers() {
     return [{ source: "/:path*", headers: [...securityHeaders] }];

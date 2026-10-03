@@ -12,11 +12,16 @@
 
 import { extractText, getDocumentProxy } from "unpdf";
 
+import { LIMITS, megabytes } from "../rules";
 import { chunkDocument, normaliseText, type TextChunk } from "./chunking";
 
-export const MAX_DOCUMENTS = 3;
-export const MAX_FILE_BYTES = 2 * 1024 * 1024;
-export const MAX_TOTAL_BYTES = 6 * 1024 * 1024;
+/**
+ * Upload ceilings come from `LIMITS` so the sandbox, the form copy and the Server
+ * Action body limit cannot disagree about how large an upload may be.
+ */
+export const MAX_DOCUMENTS = LIMITS.files.maxCount;
+export const MAX_FILE_BYTES = LIMITS.files.maxFileBytes;
+export const MAX_TOTAL_BYTES = LIMITS.files.maxTotalBytes;
 const MAX_PAGES = 400;
 const MAX_TEXT_CHARS = 2_000_000;
 
@@ -67,7 +72,10 @@ export function decodeBase64(payload: string, documentName: string): Uint8Array 
   }
 
   if (raw.byteLength > MAX_FILE_BYTES) {
-    throw new PdfRejectedError(`${documentName} exceeds the 2 MB per-file limit.`, "pdf_invalid");
+    throw new PdfRejectedError(
+      `${documentName} exceeds the ${megabytes(MAX_FILE_BYTES)} per-file limit.`,
+      "pdf_invalid",
+    );
   }
 
   const head = Buffer.from(raw.subarray(0, 5)).toString("latin1");
@@ -267,11 +275,17 @@ export function enforceUploadBudget(sizes: readonly number[]): void {
   }
   for (const size of sizes) {
     if (size > MAX_FILE_BYTES) {
-      throw new PdfRejectedError("A file exceeds the 2 MB per-file limit.", "pdf_invalid");
+      throw new PdfRejectedError(
+        `A file exceeds the ${megabytes(MAX_FILE_BYTES)} per-file limit.`,
+        "pdf_invalid",
+      );
     }
   }
   const total = sizes.reduce((sum, size) => sum + size, 0);
   if (total > MAX_TOTAL_BYTES) {
-    throw new PdfRejectedError("Combined uploads exceed the 6 MB session limit.", "pdf_invalid");
+    throw new PdfRejectedError(
+      `Combined uploads exceed the ${megabytes(MAX_TOTAL_BYTES)} session limit.`,
+      "pdf_invalid",
+    );
   }
 }

@@ -8,7 +8,7 @@ import {
   resolveEmbeddingModel,
 } from "./providers";
 import { t } from "./i18n";
-import { LIMITS, computeOverlapTokens, snapToStep } from "./rules";
+import { LIMITS, computeOverlapTokens, megabytes, snapToStep } from "./rules";
 import {
   DISTANCE_METRICS,
   PROVIDER_IDS,
@@ -104,12 +104,12 @@ const describeIssue = (issue: z.ZodIssue, input: PipelineFormInput): string => {
   if (head === "documents" && typeof index === "number") {
     const name = input.documents?.[index]?.name ?? t("documents.generic", { index: index + 1 });
     if (field === "sizeBytes" || issue.code === "too_big") {
-      return t("documents.tooLarge", { name });
+      return t("documents.tooLarge", { name, limit: megabytes(LIMITS.files.maxFileBytes) });
     }
     return t("documents.unacceptable", { name, reason: issue.message });
   }
   if (head === "documents") {
-    return t("documents.tooMany");
+    return t("documents.tooMany", { count: LIMITS.files.maxCount });
   }
   return issue.message;
 };
@@ -164,10 +164,10 @@ export const validatePipelineForm = (
 
   const totalBytes = values.documents.reduce((total, document) => total + document.sizeBytes, 0);
   if (totalBytes > LIMITS.files.maxTotalBytes) {
-    errors.documents = t("documents.totalTooLarge");
+    errors.documents = t("documents.totalTooLarge", { limit: megabytes(LIMITS.files.maxTotalBytes) });
   }
   if (values.documents.length > LIMITS.files.maxCount) {
-    errors.documents = t("documents.tooMany");
+    errors.documents = t("documents.tooMany", { count: LIMITS.files.maxCount });
   }
   for (const document of values.documents) {
     if (!hasPdfMagic(document.base64)) {
@@ -181,7 +181,10 @@ export const validatePipelineForm = (
       document.sizeBytes > LIMITS.files.maxFileBytes ||
       base64ByteLength(document.base64) > LIMITS.files.maxFileBytes
     ) {
-      errors.documents = t("documents.tooLarge", { name: document.name });
+      errors.documents = t("documents.tooLarge", {
+        name: document.name,
+        limit: megabytes(LIMITS.files.maxFileBytes),
+      });
       break;
     }
   }
@@ -244,7 +247,7 @@ export const checkClientDocuments = (
 
   for (const document of incoming) {
     if (existing.length + accepted.length >= LIMITS.files.maxCount) {
-      errors.push(t("documents.tooMany"));
+      errors.push(t("documents.tooMany", { count: LIMITS.files.maxCount }));
       break;
     }
     if (names.has(document.name)) {
@@ -256,11 +259,13 @@ export const checkClientDocuments = (
       continue;
     }
     if (document.sizeBytes > LIMITS.files.maxFileBytes) {
-      errors.push(t("documents.tooLarge", { name: document.name }));
+      errors.push(
+        t("documents.tooLarge", { name: document.name, limit: megabytes(LIMITS.files.maxFileBytes) }),
+      );
       continue;
     }
     if (totalBytes + document.sizeBytes > LIMITS.files.maxTotalBytes) {
-      errors.push(t("documents.totalTooLarge"));
+      errors.push(t("documents.totalTooLarge", { limit: megabytes(LIMITS.files.maxTotalBytes) }));
       break;
     }
     totalBytes += document.sizeBytes;

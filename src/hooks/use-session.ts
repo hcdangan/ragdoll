@@ -54,13 +54,24 @@ export const useSession = (): SessionView => {
   });
 
   const snapshot = query.data;
-  const { refetch } = query;
+  const { refetch, dataUpdatedAt } = query;
   // Stable identity: consumers put this in effect dependencies (the countdown
   // that notices expiry, for instance), and an unstable callback would re-fire
   // their effects on every render.
   const refresh = useCallback(() => {
     void refetch();
   }, [refetch]);
+
+  /**
+   * Absolute expiry, anchored to when the snapshot arrived.
+   *
+   * `Date.now() + ttlMs` recomputed on every render is what froze the header
+   * countdown: each tick re-derived the deadline from the *remaining* lifetime, so
+   * the display always showed a full window and only moved when the page reloaded.
+   * `dataUpdatedAt` is the moment the server's `ttlMs` was measured, which makes
+   * the deadline fixed until the next poll re-anchors it.
+   */
+  const expiresAt = snapshot === undefined ? null : dataUpdatedAt + snapshot.ttlMs;
 
   return {
     snapshot,
@@ -71,7 +82,7 @@ export const useSession = (): SessionView => {
     canChat: snapshot?.capabilities.chat === true,
     canEvaluate: snapshot?.capabilities.evaluate === true,
     maskedKey: snapshot?.provider?.maskedKey ?? null,
-    expiresAt: snapshot === undefined ? null : Date.now() + snapshot.ttlMs,
+    expiresAt: expiresAt,
     refetch: refresh,
   };
 };

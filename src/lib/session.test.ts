@@ -6,8 +6,8 @@ import { signId, verifyId } from "@/lib/session-token";
  * The cookie carries a session id and nothing else, so these tests cover exactly
  * two things: an id that verifies, and anything else that must not.
  *
- * The property that matters is the one an earlier design got wrong — the handle
- * must not grow with the session. A 6 MB upload session and an empty one produce a
+ * The property that matters is the one an earlier design got wrong â€” the handle
+ * must not grow with the session. A 15 MB upload session and an empty one produce a
  * cookie of the same length, which is asserted below.
  */
 describe("signed session id", () => {
