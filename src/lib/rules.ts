@@ -20,7 +20,12 @@ export const LIMITS = {
     maxTotalBytes: 15 * 1024 * 1024,
   },
   sessionTtlMs: 15 * 60 * 1000,
-  streamingTimeoutMs: 60_000,
+  /**
+   * Budget for one streamed chat answer. Mirrors `maxDuration` on
+   * `src/app/api/chat/route.ts`, and is passed to the provider so a slow generation
+   * is bounded by the platform's allowance rather than a shorter local cap.
+   */
+  streamingTimeoutMs: 300_000,
   /**
    * Wall-clock budget for one evaluation run. Mirrors `maxDuration` on
    * `src/app/evaluate/page.tsx`: the platform kills the action at that point, so the

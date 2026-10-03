@@ -23,7 +23,16 @@ import type { Citation, FallbackReason } from "@/lib/types";
  * stops the provider call instead of leaving it running.
  */
 
-export const maxDuration = 60;
+/**
+ * Duration granted to one streamed answer on a hosted platform.
+ *
+ * A self-hosted model can spend a minute loading before the first token, and a
+ * long answer on modest hardware can take minutes more; the 60-second default
+ * ended those mid-sentence. Five minutes matches the evaluation budget and is the
+ * Vercel Pro ceiling. Must stay a literal: Next reads it statically.
+ * (`LIMITS.streamingTimeoutMs` mirrors this value and bounds the provider call.)
+ */
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 interface ChatRequestBody {

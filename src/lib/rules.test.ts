@@ -51,6 +51,19 @@ describe("computeOverlapTokens", () => {
   });
 });
 
+describe("time budgets", () => {
+  it("gives chat and evaluation five minutes to match their route segment limits", () => {
+    // `maxDuration` on src/app/api/chat/route.ts and src/app/evaluate/page.tsx is 300;
+    // these constants are what the pipeline passes to the provider, so a drift here
+    // shows up as a request cut short before the platform's own deadline.
+    expect(LIMITS.streamingTimeoutMs).toBe(5 * 60 * 1000);
+    expect(LIMITS.evaluationTimeoutMs).toBe(5 * 60 * 1000);
+    // The session window still has to outlast a run, or a long answer would be
+    // discarded the moment it finished.
+    expect(LIMITS.sessionTtlMs).toBeGreaterThan(LIMITS.streamingTimeoutMs);
+  });
+});
+
 describe("uploadLimits", () => {
   it("gives a self-hosted deployment the full app allowance", () => {
     expect(uploadLimits(false)).toEqual({

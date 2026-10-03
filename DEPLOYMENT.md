@@ -114,11 +114,13 @@ fastest from `sin1`, OpenAI from `iad1`.
 
 ## 7. Function limits
 
-Chat streams through `src/app/api/chat/route.ts`, which declares `maxDuration = 60`.
-Streaming waits on the provider rather than burning CPU, so Fluid compute keeps that
-cheap; under Active CPU pricing the wait is not billed.
+Chat streams through `src/app/api/chat/route.ts` under a `maxDuration = 300` segment
+limit, and `LIMITS.streamingTimeoutMs` (the same five minutes) bounds the provider call
+behind it, so a request is cut by the platform deadline rather than by a shorter local
+cap. Streaming waits on the provider rather than burning CPU, so Fluid compute keeps
+that cheap; under Active CPU pricing the wait is not billed.
 
-Evaluation runs as a Server Action under a `maxDuration = 300` segment limit
+Evaluation runs as a Server Action under the same `maxDuration = 300`
 (`src/app/evaluate/page.tsx`), and the dashboard gives up at the same five minutes with
 a message that says the run hit the deployment's limit. Every sample costs several
 provider calls, and a cold self-hosted model can spend a minute just loading, so the

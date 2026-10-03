@@ -121,8 +121,16 @@ export function isDeclinedAnswer(text: string): boolean {
  * The offline provider is a drop-in `LlmProvider` selected by
  * `RAGDOLL_DEV_PROVIDER=1`; it exists so the Playwright journey can cover the real
  * session, action and streaming seams without a paid key.
+ *
+ * @param request Engine request describing the pipeline.
+ * @param options.timeoutMs Per-request provider budget. Chat passes the streaming
+ *   budget so one long generation — a cold self-hosted model loading, then
+ *   answering — is not cut off by the 30-second default that suits single judges.
  */
-export function buildProvider(request: EngineRequest): LlmProvider {
+export function buildProvider(
+  request: EngineRequest,
+  options: { readonly timeoutMs?: number } = {},
+): LlmProvider {
   if (isDevProviderEnabled()) {
     return createDevProvider(request.config.embeddingDimension);
   }
@@ -132,6 +140,7 @@ export function buildProvider(request: EngineRequest): LlmProvider {
     apiKey: request.apiKey,
     model: request.config.model,
     embeddingModel: request.config.embeddingModel,
+    ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
   });
 }
 
@@ -633,7 +642,10 @@ export async function* answerStream(
   enforceGuardrails(question);
 
   const config = request.config;
-  const provider = buildProvider(request);
+  // Chat gets the streaming budget rather than the per-judge default: the client is
+  // watching tokens arrive, and a self-hosted model may load for a minute before the
+  // first one, so a 30-second cap would end a perfectly good answer.
+  const provider = buildProvider(request, { timeoutMs: LIMITS.streamingTimeoutMs });
   const session = await requireSession(request);
 
   const effectiveHistory = history.length > 0 ? history : session.history.map<ChatTurn>((turn) => ({

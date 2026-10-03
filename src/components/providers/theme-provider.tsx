@@ -34,7 +34,17 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-const STORAGE_KEY = "ragdoll-theme";
+
+/**
+ * Where the choice is remembered.
+ *
+ * Versioned on purpose. The key this replaced held `"dark"` for anyone whose
+ * operating system preferred dark — the app wrote it as the default, not as a
+ * choice — so those devices would have stayed dark after light became the default.
+ * Abandoning the old key gives every browser the new default exactly once, while
+ * still remembering what the toggle does from here on.
+ */
+const STORAGE_KEY = "ragdoll-theme-v2";
 
 /** Browser chrome colour per theme; mirrors `viewport.themeColor` in the layout. */
 const THEME_COLOR: Readonly<Record<Theme, string>> = {
