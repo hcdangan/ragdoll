@@ -51,10 +51,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fdf0df" },
-    { media: "(prefers-color-scheme: dark)", color: "#094454" },
-  ],
+  // A single value rather than a media-query pair: light is the default theme
+  // whatever the operating system prefers, and the inline bootstrap script
+  // repaints this tag to match as soon as a stored dark choice (or a toggle) applies.
+  themeColor: "#fdf0df",
 };
 
 export default function RootLayout({ children }: { readonly children: ReactNode }): ReactElement {

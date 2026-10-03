@@ -1,74 +1,40 @@
+<div align="center">
+
 # RAGdoll
 
-**AI RAG Dashboard & Chatbot** — build a retrieval-augmented generation pipeline,
-evaluate it, and chat with your own PDFs. No code required.
+**AI RAG Dashboard & Chatbot** — build a retrieval-augmented generation pipeline, evaluate it, and chat with your own PDFs. No code required.
+
+Four providers , six embedding models , eight Ragas metrics , three PDFs per session — behind a Next.js 15 server that runs the whole pipeline in-process.
+
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06b6d4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![TanStack Query](https://img.shields.io/badge/TanStack_Query-5-ff4154?logo=reactquery&logoColor=white)](https://tanstack.com/query)
+[![AI SDK](https://img.shields.io/badge/AI_SDK-5-000000?logo=vercel&logoColor=white)](https://sdk.vercel.ai/)
+[![Zod](https://img.shields.io/badge/Zod-3-3e67b1?logo=zod&logoColor=white)](https://zod.dev/)
+[![Vitest](https://img.shields.io/badge/Vitest-2-6e9f18?logo=vitest&logoColor=white)](https://vitest.dev/)
+[![Playwright](https://img.shields.io/badge/Playwright-1.49-2ead33)](https://playwright.dev/)
+[![Node.js](https://img.shields.io/badge/Node.js-20%2B-5fa04e?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![pnpm](https://img.shields.io/badge/pnpm-9-f69220?logo=pnpm&logoColor=white)](https://pnpm.io/)
+[![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI-2088ff?logo=githubactions&logoColor=white)](https://github.com/hcdangan/ragdoll/actions)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+<img src="public/brand/ragdoll-logo.png" alt="RAGdoll" width="360">
+
+</div>
+
+---
+
+## What this is
 
 RAGdoll is a RAG pipeline workbench: pick a provider, drop in up to three PDFs,
 tune chunking and retrieval, and the app assembles the index, scores it with
 Ragas-style metrics, and answers questions with page-level citations.
 
-<p align="center">
-  <img src="public/brand/ragdoll-logo.png" alt="RAGdoll" width="360">
-</p>
-
-## What it does
-
-| Route | Purpose |
-| --- | --- |
-| `/` | Project overview and licensing. |
-| `/create` | Configure the provider, models, chunking and retrieval; build the index. |
-| `/evaluate` | Run the eight-metric Ragas suite. Disabled until a pipeline exists. |
-| `/chat` | Cited, grounded chat. Disabled until a pipeline exists. |
-
-- **Four providers** — OpenAI, Vocareum, DeepSeek, Ollama/llama.cpp (self-hosted).
-- **Six embedding models** with their vector widths resolved automatically.
-- **Context injection or agentic retrieval**, chosen per pipeline.
-- **Groundedness gate** — a Ragas `faithfulness` pass discards unsupported answers
-  and emits *"Sorry, I don't know the answer to that."* instead.
-- **Citation-first streaming** — sources arrive before the first token.
-- **Nothing on disk** — the pipeline, PDFs, citations and chat live server-side in
-  the session (15-minute sliding TTL) and are dropped when it expires.
-
-## Tech stack
-
-<p align="center">
-  <img src="https://cdn.simpleicons.org/nextdotjs/094454" alt="Next.js" title="Next.js" height="34">
-  &nbsp;
-  <img src="https://cdn.simpleicons.org/react/094454" alt="React" title="React" height="34">
-  &nbsp;
-  <img src="https://cdn.simpleicons.org/typescript/094454" alt="TypeScript" title="TypeScript" height="34">
-  &nbsp;
-  <img src="https://cdn.simpleicons.org/tailwindcss/094454" alt="Tailwind CSS" title="Tailwind CSS" height="34">
-  &nbsp;
-  <img src="https://cdn.simpleicons.org/reactquery/094454" alt="TanStack Query" title="TanStack Query" height="34">
-  &nbsp;
-  <img src="https://cdn.simpleicons.org/zod/094454" alt="Zod" title="Zod" height="34">
-</p>
-<p align="center">
-  <img src="https://cdn.simpleicons.org/vitest/094454" alt="Vitest" title="Vitest" height="34">
-  &nbsp;
-  <img src="https://cdn.simpleicons.org/vercel/094454" alt="Vercel AI SDK" title="Vercel AI SDK" height="34">
-  &nbsp;
-  <img src="https://cdn.simpleicons.org/nodedotjs/094454" alt="Node.js" title="Node.js" height="34">
-  &nbsp;
-  <img src="https://cdn.simpleicons.org/pnpm/094454" alt="pnpm" title="pnpm" height="34">
-  &nbsp;
-  <img src="https://cdn.simpleicons.org/githubactions/094454" alt="GitHub Actions" title="GitHub Actions" height="34">
-</p>
-
-| Layer | Choice |
-| --- | --- |
-| Language | TypeScript, strict — no `any` anywhere |
-| Framework | Next.js 15 App Router, React 19 (Server Components by default) |
-| Styling | Tailwind CSS 3 — six-colour brand palette, light and dark themes |
-| Server state | TanStack Query |
-| Streaming | Vercel AI SDK v5 data stream protocol, consumed with `useChat` |
-| Retrieval | In-process typed-array vector index: cosine, dot product or euclidean |
-| PDF parsing | `unpdf` (PDF.js compiled to WebAssembly), sandboxed in-process |
-| Validation | Zod schemas shared by the creation form and the Server Action |
-| Testing | Vitest (unit + in-process engine integration), Playwright (E2E) |
-| CI | GitHub Actions: lint, typecheck, test, build, `pnpm audit`, CodeQL |
-| Hosting | Vercel from the repository root; Vercel KV / Upstash for the session store |
+Nothing is mocked. Retrieval, the citation trail, the groundedness gate, the streaming
+protocol and the metric suite all run against the provider you configured, and the same
+pipeline answers in chat that the evaluation scored.
 
 ## Architecture
 
@@ -97,6 +63,55 @@ index when a Function instance is recycled.
 **One Vercel project, imported from the repository root with no settings changed.**
 See [DEPLOYMENT.md](DEPLOYMENT.md).
 
+## Feature coverage
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Project overview and licensing. |
+| `/create` | Configure the provider, models, chunking and retrieval; build the index. |
+| `/evaluate` | Run the eight-metric Ragas suite. Disabled until a pipeline exists. |
+| `/chat` | Cited, grounded chat. Disabled until a pipeline exists. |
+
+- **Four providers** — OpenAI, Vocareum, DeepSeek, Ollama/llama.cpp (self-hosted).
+- **Six embedding models** with their vector widths resolved automatically.
+- **Context injection or agentic retrieval**, chosen per pipeline.
+- **Groundedness gate** — a Ragas `faithfulness` pass discards unsupported answers
+  and emits *"Sorry, I don't know the answer to that."* instead.
+- **Citation-first streaming** — sources arrive before the first token.
+- **Nothing on disk** — the pipeline, PDFs, citations and chat live server-side in
+  the session (15-minute sliding TTL) and are dropped when it expires.
+
+## Tech stack
+
+| Layer | Choice |
+| --- | --- |
+| Language | TypeScript, strict — no `any` anywhere |
+| Framework | Next.js 15 App Router, React 19 (Server Components by default) |
+| Styling | Tailwind CSS 3 — six-colour brand palette, light and dark themes |
+| Server state | TanStack Query |
+| Streaming | Vercel AI SDK v5 data stream protocol, consumed with `useChat` |
+| Retrieval | In-process typed-array vector index: cosine, dot product or euclidean |
+| PDF parsing | `unpdf` (PDF.js compiled to WebAssembly), sandboxed in-process |
+| Validation | Zod schemas shared by the creation form and the Server Action |
+| Testing | Vitest (unit + in-process engine integration), Playwright (E2E) |
+| CI | GitHub Actions: lint, typecheck, test, build, `pnpm audit`, CodeQL |
+| Hosting | Vercel from the repository root; Vercel KV / Upstash for the session store |
+
+## Quickstart
+
+```bash
+pnpm install
+cp .env.example .env.local
+pnpm dev                          # http://localhost:3000
+```
+
+There is no second process to start. To try the whole pipeline — ingest, retrieval,
+citations, the groundedness gate, streaming and the metric suite — with no API key
+and no network, set `RAGDOLL_DEV_PROVIDER=1` in `.env.local`. It swaps in a
+deterministic offline provider (hashed bag-of-words embeddings and canned answers),
+so the flow is reproducible; it is opt-in through that variable only, which no
+deployment sets.
+
 ## Repository layout
 
 ```
@@ -114,20 +129,15 @@ tools/              brand asset pipeline (logo → avatar, icons)
 scripts/            E2E PDF fixture generator
 ```
 
-## Local development
+## Configuration
 
-```bash
-pnpm install
-cp .env.example .env.local
-pnpm dev                          # http://localhost:3000
-```
-
-There is no second process to start. To try the whole pipeline — ingest, retrieval,
-citations, the groundedness gate, streaming and the metric suite — with no API key
-and no network, set `RAGDOLL_DEV_PROVIDER=1` in `.env.local`. It swaps in a
-deterministic offline provider (hashed bag-of-words embeddings and canned answers),
-so the flow is reproducible; it is opt-in through that variable only, which no
-deployment sets.
+| Variable | Purpose |
+| --- | --- |
+| `RAGDOLL_SESSION_SECRET` | ≥32 chars; signs the session cookie and seals the provider key. Required in production. |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Shared session store. Effectively required on Vercel — without it a session exists only on one instance. |
+| `RAGDOLL_HOSTED` | Forces hosted mode so loopback providers fail fast. Vercel's own `VERCEL=1` is detected, so this is only for self-hosting behind a proxy. |
+| `RAGDOLL_DEV_PROVIDER` | `1` swaps in the deterministic offline provider. Never set on a deployment that answers real questions. |
+| `RAGDOLL_DISABLE_GUARDRAILS` | `1` disables the jailbreak / prompt-injection input filter, for investigating a false positive. |
 
 ## Testing
 
@@ -142,16 +152,6 @@ The engine integration test drives the real pipeline against the offline provide
 including PDF parsing, retrieval ranking, the groundedness gate and stream ordering.
 The Playwright journey covers the seams a unit test cannot: the session cookie,
 Server Actions, the streaming route handler and `useChat`.
-
-## Configuration
-
-| Variable | Purpose |
-| --- | --- |
-| `RAGDOLL_SESSION_SECRET` | ≥32 chars; signs the session cookie and seals the provider key. Required in production. |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Shared session store. Effectively required on Vercel — without it a session exists only on one instance. |
-| `RAGDOLL_HOSTED` | Forces hosted mode so loopback providers fail fast. Vercel's own `VERCEL=1` is detected, so this is only for self-hosting behind a proxy. |
-| `RAGDOLL_DEV_PROVIDER` | `1` swaps in the deterministic offline provider. Never set on a deployment that answers real questions. |
-| `RAGDOLL_DISABLE_GUARDRAILS` | `1` disables the jailbreak / prompt-injection input filter, for investigating a false positive. |
 
 ## Submitted to
 

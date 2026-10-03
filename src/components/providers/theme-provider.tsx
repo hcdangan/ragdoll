@@ -20,6 +20,10 @@ import { t } from "@/lib/i18n";
  * this provider only mirrors and mutates it. Storing the choice in localStorage
  * keeps the decision local to the device, matching the "nothing on disk
  * server-side" promise in the UI copy.
+ *
+ * **Light is the default, and the operating system does not override it.** A dark
+ * OS preference used to decide the first visit, which meant most users met a dark
+ * app they had not asked for; dark is now opt-in through the toggle.
  */
 
 type Theme = "light" | "dark";
@@ -32,10 +36,29 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 const STORAGE_KEY = "ragdoll-theme";
 
+/** Browser chrome colour per theme; mirrors `viewport.themeColor` in the layout. */
+const THEME_COLOR: Readonly<Record<Theme, string>> = {
+  light: "#fdf0df",
+  dark: "#094454",
+};
+
 const readDomTheme = (): Theme =>
   typeof document !== "undefined" && document.documentElement.classList.contains("dark")
     ? "dark"
     : "light";
+
+/**
+ * Applies a theme to the document.
+ *
+ * The `<meta name="theme-color">` is repainted too: it is a single tag rather than a
+ * pair of media queries, because the app theme no longer follows the OS, so a
+ * media-driven tag would colour the browser chrome for the wrong scheme.
+ */
+const applyTheme = (theme: Theme): void => {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  const meta = document.querySelector('meta[name="theme-color"]');
+  meta?.setAttribute("content", THEME_COLOR[theme]);
+};
 
 export function ThemeProvider({ children }: { readonly children: ReactNode }): ReactElement {
   const [theme, setTheme] = useState<Theme>("light");
@@ -47,7 +70,7 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }): R
   const toggle = useCallback(() => {
     setTheme((current) => {
       const next: Theme = current === "dark" ? "light" : "dark";
-      document.documentElement.classList.toggle("dark", next === "dark");
+      applyTheme(next);
       try {
         window.localStorage.setItem(STORAGE_KEY, next);
       } catch {
@@ -73,5 +96,10 @@ export const useTheme = (): ThemeContextValue => {
 export const themeToggleLabel = (theme: Theme): string =>
   theme === "dark" ? t("nav.themeLight") : t("nav.themeDark");
 
-/** Inline script that applies the stored theme before the first paint. */
-export const themeBootstrapScript = `(function(){try{var s=localStorage.getItem('${STORAGE_KEY}');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;if(s==='dark'||(!s&&d)){document.documentElement.classList.add('dark');}}catch(e){}})();`;
+/**
+ * Inline script that applies the stored theme before the first paint.
+ *
+ * Only an explicit stored choice turns dark on: absent one, the app renders light
+ * whatever `prefers-color-scheme` says.
+ */
+export const themeBootstrapScript = `(function(){try{var s=localStorage.getItem('${STORAGE_KEY}');var dark=s==='dark';if(dark){document.documentElement.classList.add('dark');}var m=document.querySelector('meta[name="theme-color"]');if(m){m.setAttribute('content',dark?'${THEME_COLOR.dark}':'${THEME_COLOR.light}');}}catch(e){}})();`;

@@ -162,19 +162,38 @@ test.describe("shell", () => {
     const toggle = page.getByRole("button", { name: /^(Dark|Light)$/ });
     const html = page.locator("html");
 
-    // The stored preference wins, then the OS preference, so which scheme the page
-    // starts in depends on the runner. Clicking until dark is reached asserts the
-    // toggle really flips the class without assuming a starting point.
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const isDark = await html.evaluate((element) => element.classList.contains("dark"));
-      if (isDark) {
-        break;
-      }
-      await toggle.click();
-      await page.waitForTimeout(100);
-    }
+    // Light is the default, so this starts light and flips to dark.
+    await expect(html).not.toHaveClass(/dark/);
+    await toggle.click();
 
     await expect(html).toHaveClass(/dark/);
+  });
+
+  /**
+   * Light is the default *whatever the operating system prefers*; a dark OS used to
+   * decide the first visit, which is the behaviour this pins down.
+   */
+  test.describe("with the operating system set to dark", () => {
+    test.use({ colorScheme: "dark" });
+
+    test("the first visit is still light, and an explicit choice persists", async ({ page }) => {
+      await page.goto("/");
+
+      const html = page.locator("html");
+      const themeColor = page.locator('meta[name="theme-color"]');
+
+      await expect(html).not.toHaveClass(/dark/);
+      await expect(themeColor).toHaveAttribute("content", "#fdf0df");
+
+      await page.getByRole("button", { name: /^(Dark|Light)$/ }).click();
+
+      await expect(html).toHaveClass(/dark/);
+      // The browser chrome follows the app theme, not the OS.
+      await expect(themeColor).toHaveAttribute("content", "#094454");
+
+      await page.reload();
+      await expect(html).toHaveClass(/dark/);
+    });
   });
 
   test("an unbuilt pipeline is explained rather than hidden", async ({ page }) => {
