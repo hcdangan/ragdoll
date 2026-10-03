@@ -35,6 +35,8 @@ test.describe("pipeline journey", () => {
     // confirmation, which is rendered only after the session write returns.
     const confirmation = page.locator('[role="status"]', { hasText: /chunks from/i });
     await expect(confirmation).toBeVisible({ timeout: 30_000 });
+    // The confirmation names the model the pipeline was actually built with.
+    await expect(confirmation).toContainText("gpt-4o-mini");
 
     await page.goto("/chat");
     const input = page.getByLabel(/Ask something about your documents/i);

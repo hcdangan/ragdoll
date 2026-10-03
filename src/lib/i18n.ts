@@ -165,9 +165,9 @@ const en = {
   "create.submitting": "Testing provider and building the index…",
   "create.test": "Test connection",
   "create.testing": "Testing connection…",
-  "create.testOk": "Connected to {model} — embeddings {dimensions}d in {latency} ms.",
-  "create.success": "Pipeline ready — {chunks} chunks from {documents} documents.",
-  "create.successNoDocs": "Pipeline ready. No documents indexed yet.",
+  "create.testOk": "Connected to {model} — embeddings {dimensions}d, first reply in {latency} ms.",
+  "create.success": "Pipeline ready — {chunks} chunks from {documents} documents · {model}.",
+  "create.successNoDocs": "Pipeline ready. No documents indexed yet · {model}.",
   "create.noTextNotice":
     "The pipeline was created, but no text could be extracted from your PDFs, so nothing was indexed — chat will only ever reply that it does not know. Upload a PDF whose text can be selected (not a scan) and create the pipeline again.",
   "create.clear": "Clear RAG pipeline",
@@ -208,6 +208,8 @@ const en = {
   "evaluate.groundTruthHeading": "Ground truth",
   "evaluate.download": "Download JSON",
   "evaluate.failed": "Evaluation failed: {message}",
+  "evaluate.timedOut":
+    "The evaluation did not finish within the deployment's 5-minute limit, so it was stopped. Fewer questions, a faster model, or a self-hosted deployment will fit the budget.",
 
   "chat.title": "Chat",
   "chat.subtitle": "Ask questions and get answers grounded in your documents.",

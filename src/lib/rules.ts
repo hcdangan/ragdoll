@@ -21,6 +21,12 @@ export const LIMITS = {
   },
   sessionTtlMs: 15 * 60 * 1000,
   streamingTimeoutMs: 60_000,
+  /**
+   * Wall-clock budget for one evaluation run. Mirrors `maxDuration` on
+   * `src/app/evaluate/page.tsx`: the platform kills the action at that point, so the
+   * dashboard waits exactly as long and then explains the cutoff.
+   */
+  evaluationTimeoutMs: 5 * 60 * 1000,
 } as const;
 
 export const FALLBACK_ANSWER = "Sorry, I don't know the answer to that.";

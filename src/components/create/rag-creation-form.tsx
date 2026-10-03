@@ -129,6 +129,10 @@ export function RagCreationForm(): ReactElement {
   const { notify, clear } = useNotices();
   const fileInput = useRef<HTMLInputElement | null>(null);
   const hydratedFor = useRef<string | null>(null);
+  /** True once the user has touched the form, so a poll cannot revert their edits. */
+  const edited = useRef(false);
+  /** Last model and base URL per provider, so switching providers does not wipe them. */
+  const remembered = useRef<Partial<Record<ProviderId, { model: string; baseUrl: string }>>>({});
 
   const [form, setForm] = useState<FormState>(defaultFormState);
   const [apiKey, setApiKey] = useState("");
@@ -147,26 +151,43 @@ export function RagCreationForm(): ReactElement {
   // An existing pipeline is the session's truth, so the fields adopt it on first
   // read. Without this, a reload showed default sliders next to a banner reporting
   // the configured values, and the two disagreed.
+  //
+  // Never once the user has typed: the session snapshot also refreshes on a poll, and
+  // a poll that re-hydrated the form silently replaced a model the user had just
+  // entered with the one stored in the pipeline.
   useEffect(() => {
-    if (pipeline === null || hydratedFor.current === pipeline.createdAt) {
+    if (pipeline === null || edited.current || hydratedFor.current === pipeline.createdAt) {
       return;
     }
     hydratedFor.current = pipeline.createdAt;
     setForm(formStateFromPipeline(pipeline.config));
   }, [pipeline]);
 
+  // Remember what was typed for the provider in use, so toggling providers to compare
+  // them does not discard a model or base URL.
+  useEffect(() => {
+    remembered.current[form.provider] = { model: form.model, baseUrl: form.baseUrl };
+  }, [form.provider, form.model, form.baseUrl]);
+
   const updateForm = useCallback(<K extends keyof FormState>(key: K, value: FormState[K]) => {
+    edited.current = true;
     setForm((current) => ({ ...current, [key]: value }));
   }, []);
 
   const selectProvider = useCallback((provider: ProviderId) => {
-    setForm((current) => ({
-      ...current,
-      provider,
-      model: PROVIDERS[provider].defaultModel,
-      embeddingModel: PROVIDERS[provider].embeddingModels[0] ?? current.embeddingModel,
-      baseUrl: provider === "ollama" ? current.baseUrl : "",
-    }));
+    edited.current = true;
+    setForm((current) => {
+      // Restore what this provider was last configured with; only fall back to the
+      // provider's default model when it has never been used.
+      const previous = remembered.current[provider];
+      return {
+        ...current,
+        provider,
+        model: previous?.model ?? PROVIDERS[provider].defaultModel,
+        embeddingModel: PROVIDERS[provider].embeddingModels[0] ?? current.embeddingModel,
+        baseUrl: provider === "ollama" ? (previous?.baseUrl ?? current.baseUrl) : "",
+      };
+    });
     setTestResult(null);
   }, []);
 
@@ -227,7 +248,10 @@ export function RagCreationForm(): ReactElement {
       }
       setTestResult(
         t("create.testOk", {
-          model: result.data.modelEcho || form.model,
+          // The configured model, not the probe's reply text: `modelEcho` is whatever
+          // the model answered ("Ready"), and printing that in the name slot read as a
+          // model called "Ready".
+          model: form.model,
           dimensions: result.data.embeddingDimension,
           latency: result.data.latencyMs,
         }),
@@ -258,19 +282,22 @@ export function RagCreationForm(): ReactElement {
       }
       notify({
         tone: "success",
+        // The model is part of the message: "Pipeline ready" alone left the user
+        // unable to tell which model the pipeline was actually built against.
         message:
           documents.length === 0
-            ? t("create.successNoDocs")
+            ? t("create.successNoDocs", { model: form.model })
             : t("create.success", {
                 chunks: result.data.chunkCount,
                 documents: result.data.documents.length,
+                model: form.model,
               }),
       });
       refetch();
     } finally {
       setBusy("idle");
     }
-  }, [clear, documents.length, notify, payload, refetch]);
+  }, [clear, documents.length, form.model, notify, payload, refetch]);
 
   const clearPipeline = useCallback(async () => {
     if (!window.confirm(t("session.resetConfirm"))) {
@@ -342,6 +369,16 @@ export function RagCreationForm(): ReactElement {
               <input
                 id={ids.baseUrl}
                 className="input-mono"
+                type="url"
+                inputMode="url"
+                // Browser autofill fights a URL being typed: Chrome offers a
+                // previously-entered address and rewrites the field mid-keystroke,
+                // which reads as characters (often a slash) vanishing. Nothing about
+                // this field should be remembered by the browser.
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 value={definition.requiresBaseUrl ? form.baseUrl : definition.baseUrl ?? ""}
                 placeholder={t("provider.baseUrlPlaceholder")}
                 readOnly={!definition.requiresBaseUrl}
@@ -358,6 +395,12 @@ export function RagCreationForm(): ReactElement {
                   id={ids.model}
                   className="input-mono"
                   list={`${ids.model}-suggestions`}
+                  // Same reasoning as the base URL: an autofilled default would
+                  // silently replace the model that was typed.
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   value={form.model}
                   placeholder={t("model.placeholder")}
                   disabled={disabled}

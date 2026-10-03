@@ -116,9 +116,16 @@ fastest from `sin1`, OpenAI from `iad1`.
 
 Chat streams through `src/app/api/chat/route.ts`, which declares `maxDuration = 60`.
 Streaming waits on the provider rather than burning CPU, so Fluid compute keeps that
-cheap; under Active CPU pricing the wait is not billed. Evaluation runs as a Server
-Action and samples four passages by default (twelve at most), because each sample is
-several provider calls and the whole run has to fit one function invocation.
+cheap; under Active CPU pricing the wait is not billed.
+
+Evaluation runs as a Server Action under a `maxDuration = 300` segment limit
+(`src/app/evaluate/page.tsx`), and the dashboard gives up at the same five minutes with
+a message that says the run hit the deployment's limit. Every sample costs several
+provider calls, and a cold self-hosted model can spend a minute just loading, so the
+60-second default truncated legitimate runs. Five minutes is the ceiling on Vercel Pro;
+if a run still does not fit, lower the question count (the suite defaults to four, twelve
+at most) or self-host, where no such limit applies. Both values are compiled into
+`.next/server/functions-config-manifest.json`, so a change is visible after a build.
 
 ## 8. Local development
 

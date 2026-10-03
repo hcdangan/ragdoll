@@ -41,6 +41,7 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
 - AI SDK Integration: The Route Handler writes `data-*`, `text-*` and `finish` parts; the frontend consumes them with `useChat`.
 - Citation-First Streaming: Before emitting assistant tokens, send retrieved sources as Vercel AI SDK `data` stream parts (AI SDK v5 Data Stream Protocol) with a `citation` payload type. The `useChat` `onData` callback populates the citation panel immediately. Sources are keyed by document ID and page number.
 - Timeout & Abort: 60s per streaming request. The client aborts via `AbortController` on unmount or user interrupt; the signal is threaded into generation, and an aborted answer is kept as-is rather than judged.
+- Evaluation Budget: the evaluation Server Action runs under a 5-minute segment limit (`maxDuration = 300` on `src/app/evaluate/page.tsx`, mirrored by `LIMITS.evaluationTimeoutMs`). The suite spends roughly eight provider calls per sampled question and a self-hosted model can take a minute to load, so the platform default of 60s cut legitimate runs short. If the action is stopped, the dashboard says the run hit the deployment's time limit instead of leaving a dead spinner.
 - Platform Limit Note: 60s fits Vercel Hobby/Pro defaults. Raise `maxDuration` explicitly if a longer timeout is needed on Enterprise.
 
 ### Vercel Deployment Architecture

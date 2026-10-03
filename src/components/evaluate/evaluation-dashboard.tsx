@@ -8,6 +8,7 @@ import { IconAlert, IconGauge, IconRefresh, IconSpinner } from "@/components/ui/
 import { useNotices } from "@/components/providers/notice-provider";
 import { useSession } from "@/hooks/use-session";
 import { t } from "@/lib/i18n";
+import { LIMITS } from "@/lib/rules";
 import { EVALUATION_METRICS, type EvaluationMetric, type EvaluationReport, type MetricResult } from "@/lib/types";
 
 /**
@@ -60,7 +61,23 @@ export function EvaluationDashboard(): ReactElement {
     setRunning(true);
     setRevealed(0);
     try {
-      const result = await runEvaluationAction({ sampleCount });
+      // The platform aborts the action at the segment's `maxDuration`, which arrives
+      // as an opaque failure. Racing it locally means the user is told the run hit
+      // the deployment's time limit — and what to do about it — instead of watching a
+      // spinner that never resolves.
+      let timer: number | undefined;
+      const timedOut = new Promise<null>((resolve) => {
+        timer = window.setTimeout(() => {
+          resolve(null);
+        }, LIMITS.evaluationTimeoutMs);
+      });
+      const result = await Promise.race([runEvaluationAction({ sampleCount }), timedOut]);
+      window.clearTimeout(timer);
+
+      if (result === null) {
+        notify({ tone: "warning", title: t("evaluate.title"), message: t("evaluate.timedOut") });
+        return;
+      }
       if (!result.ok) {
         notify({
           tone: "danger",

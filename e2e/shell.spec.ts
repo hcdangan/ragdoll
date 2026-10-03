@@ -109,6 +109,42 @@ test.describe("shell", () => {
     await expect(topK).toHaveAttribute("aria-valuenow", "5");
   });
 
+  test("a self-hosted base URL and model survive switching providers", async ({ page }) => {
+    await page.goto("/create");
+
+    await page.getByRole("radio", { name: /Ollama/i }).check({ force: true });
+    const baseUrl = page.getByLabel(/Base URL/i);
+    const model = page.locator('input[list$="-suggestions"]');
+    await baseUrl.fill("http://hcdangan.duckdns.org:11434/v1");
+    await model.fill("gpt-oss-20b-Q4_K_M");
+
+    // Comparing providers is normal, and it used to silently reset the model to the
+    // provider default — which is how "Pipeline ready" came to report llama3.2 for a
+    // pipeline built with something else.
+    await page.getByRole("radio", { name: /OpenAI/i }).check({ force: true });
+    await expect(model).toHaveValue("gpt-4o-mini");
+    await page.getByRole("radio", { name: /Ollama/i }).check({ force: true });
+
+    await expect(model).toHaveValue("gpt-oss-20b-Q4_K_M");
+    await expect(baseUrl).toHaveValue("http://hcdangan.duckdns.org:11434/v1");
+  });
+
+  test("the base URL keeps every character typed into it", async ({ page }) => {
+    await page.goto("/create");
+    await page.getByRole("radio", { name: /Ollama/i }).check({ force: true });
+
+    const baseUrl = page.getByLabel(/Base URL/i);
+    const typed = "http://192.168.1.10:11434/v1";
+    await baseUrl.click();
+    // Real key events, one at a time: a field that normalised or dropped slashes
+    // would fail here.
+    await baseUrl.pressSequentially(typed, { delay: 10 });
+
+    await expect(baseUrl).toHaveValue(typed);
+    // Autofill would fight a URL being typed; nothing here should be remembered.
+    await expect(baseUrl).toHaveAttribute("autocomplete", "off");
+  });
+
   test("the API key field is masked and toggleable", async ({ page }) => {
     await page.goto("/create");
 
