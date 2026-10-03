@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import type { SessionSnapshot } from "@/app/api/session/route";
+import { LIMITS } from "@/lib/rules";
 import type { PipelineSummary } from "@/lib/types";
 
 /**
@@ -38,6 +39,8 @@ export interface SessionView {
   readonly canEvaluate: boolean;
   readonly maskedKey: string | null;
   readonly expiresAt: number | null;
+  /** Upload ceilings this deployment can deliver; see `SessionSnapshot`. */
+  readonly uploadLimits: { readonly maxFileBytes: number; readonly maxTotalBytes: number };
   readonly refetch: () => void;
 }
 
@@ -83,6 +86,12 @@ export const useSession = (): SessionView => {
     canEvaluate: snapshot?.capabilities.evaluate === true,
     maskedKey: snapshot?.provider?.maskedKey ?? null,
     expiresAt: expiresAt,
+    // Falls back to the app's own ceilings until the first snapshot arrives, so the
+    // form is never briefly more permissive than the deployment.
+    uploadLimits: {
+      maxFileBytes: snapshot?.capabilities.maxFileBytes ?? LIMITS.files.maxFileBytes,
+      maxTotalBytes: snapshot?.capabilities.maxTotalBytes ?? LIMITS.files.maxTotalBytes,
+    },
     refetch: refresh,
   };
 };

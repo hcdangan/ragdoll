@@ -4,6 +4,7 @@ import { getServerEnv } from "@/lib/env";
 import type { TranslationKey } from "@/lib/i18n";
 import { toPipelineSummary } from "@/lib/pipeline/session-helpers";
 import { reset } from "@/lib/rag/service";
+import { uploadLimits } from "@/lib/rules";
 import { describeApiKey } from "@/lib/secrets";
 import {
   adoptSession,
@@ -35,6 +36,15 @@ export interface SessionSnapshot {
     readonly chat: boolean;
     readonly evaluate: boolean;
     readonly sharedStore: boolean;
+    /**
+     * Upload ceilings this deployment can actually deliver.
+     *
+     * A hosted platform caps the Server Action request body, so the browser has to
+     * refuse an oversized PDF itself — by the time the platform answers 413 the
+     * action never ran and there is nothing to explain.
+     */
+    readonly maxFileBytes: number;
+    readonly maxTotalBytes: number;
   };
   readonly notices: readonly TranslationKey[];
 }
@@ -65,6 +75,7 @@ export async function GET(): Promise<NextResponse> {
     notices.push("session.noSharedStore");
   }
 
+  const limits = uploadLimits(env.hosted);
   const snapshot: SessionSnapshot = {
     sessionId: session.id,
     ttlMs: remainingTtlMs(session),
@@ -74,6 +85,8 @@ export async function GET(): Promise<NextResponse> {
       chat: session.pipeline !== null && status?.hasKey === true,
       evaluate: session.pipeline !== null,
       sharedStore: env.kv !== null,
+      maxFileBytes: limits.maxFileBytes,
+      maxTotalBytes: limits.maxTotalBytes,
     },
     notices,
   };

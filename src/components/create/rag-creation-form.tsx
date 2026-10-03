@@ -122,7 +122,7 @@ export function RagCreationForm(): ReactElement {
     upload: useId(),
   };
 
-  const { hasPipeline, pipeline, maskedKey, refetch } = useSession();
+  const { hasPipeline, pipeline, maskedKey, refetch, uploadLimits } = useSession();
   // Action results — success, failure and upload rejections — go to the global
   // stack: the form is tall, and a banner at the top is off-screen for a user who
   // just pressed a button at the bottom.
@@ -187,7 +187,7 @@ export function RagCreationForm(): ReactElement {
       }
 
       setDocuments((current) => {
-        const { accepted, errors: rejected } = checkClientDocuments(current, pending);
+        const { accepted, errors: rejected } = checkClientDocuments(current, pending, uploadLimits);
         if (rejected.length > 0) {
           notify({ tone: "danger", message: rejected.join(" ") });
         }
@@ -197,7 +197,7 @@ export function RagCreationForm(): ReactElement {
         fileInput.current.value = "";
       }
     },
-    [notify],
+    [notify, uploadLimits],
   );
 
   const payload = useMemo(
@@ -464,10 +464,13 @@ export function RagCreationForm(): ReactElement {
               <p className="field-hint mt-2">
                 {t("documents.limits", {
                   count: LIMITS.files.maxCount,
-                  perFile: megabytes(LIMITS.files.maxFileBytes),
-                  total: megabytes(LIMITS.files.maxTotalBytes),
+                  perFile: megabytes(uploadLimits.maxFileBytes),
+                  total: megabytes(uploadLimits.maxTotalBytes),
                 })}
               </p>
+              {uploadLimits.maxFileBytes < LIMITS.files.maxFileBytes ? (
+                <p className="field-hint mt-1">{t("documents.limitsHosted")}</p>
+              ) : null}
             </div>
 
             {errors.documents === undefined ? null : (
@@ -512,7 +515,7 @@ export function RagCreationForm(): ReactElement {
 
             <p className="field-hint">
               {t("session.documents", { count: documents.length })} ·{" "}
-              {(totalBytes / 1024 / 1024).toFixed(2)} MB / {megabytes(LIMITS.files.maxTotalBytes)}
+              {(totalBytes / 1024 / 1024).toFixed(2)} MB / {megabytes(uploadLimits.maxTotalBytes)}
             </p>
           </div>
         </section>

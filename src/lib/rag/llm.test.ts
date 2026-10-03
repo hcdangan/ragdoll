@@ -188,6 +188,51 @@ describe("OpenAI-compatible protocol", () => {
 
     expect((failure as ProviderError).code).toBe("invalid_api_key");
   });
+
+  it("treats a rejected key carried on a 400 as an authentication failure", async () => {
+    // Vocareum answers 400 — not 401 — for a dead key, and its course keys expire on
+    // a fixed date. Reporting that as a generic provider error buried the one
+    // sentence the user needed inside a block of JSON.
+    stubFetch(() =>
+      jsonResponse(
+        {
+          error: {
+            code: null,
+            message: "Invalid Key. Expired:09-29-2026 22:50:14 GMT",
+            type: "invalid_request_error",
+          },
+        },
+        400,
+      ),
+    );
+
+    const failure = await new ProviderClient(VOCAREUM)
+      .complete(MESSAGES)
+      .catch((error: unknown) => error);
+
+    const providerError = failure as ProviderError;
+    expect(providerError.code).toBe("invalid_api_key");
+    expect(providerError.message).toContain("expired");
+    expect(providerError.message).toContain("Issue a new key");
+  });
+
+  it("treats the other rejected-key wordings providers use as authentication failures", async () => {
+    const wordings = [
+      "This key was not found. Please check key was inputed correctly.",
+      "Authentication Fails, Your api key is invalid",
+    ];
+
+    for (const message of wordings) {
+      stubFetch(() => jsonResponse({ error: { message } }, 400));
+
+      const failure = await new ProviderClient(DEEPSEEK)
+        .complete(MESSAGES)
+        .catch((error: unknown) => error);
+
+      expect((failure as ProviderError).code, message).toBe("invalid_api_key");
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 /**

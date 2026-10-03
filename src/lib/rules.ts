@@ -32,6 +32,37 @@ export const GROUNDEDNESS_THRESHOLD = 0.5;
  */
 export const megabytes = (bytes: number): string => `${Math.round(bytes / (1024 * 1024))} MB`;
 
+/**
+ * Largest request body a hosted platform will carry into a Server Action.
+ *
+ * Vercel rejects a Function request over 4.5 MB, and the upload travels as base64
+ * inside JSON, which inflates it by a third. Self-hosted deployments have no such
+ * ceiling and get the full `LIMITS.files` allowance; everywhere else the app must
+ * refuse the upload *before* sending it, because a platform 413 never reaches the
+ * Server Action and surfaces as an opaque failure.
+ */
+const HOSTED_BODY_LIMIT_BYTES = 4_500_000;
+/** Base64 grows an upload by 4/3; leave headroom for the JSON envelope. */
+const BASE64_INFLATION = 4 / 3;
+const HOSTED_FILE_BYTES = Math.floor(HOSTED_BODY_LIMIT_BYTES / BASE64_INFLATION / (1024 * 1024)) * 1024 * 1024;
+
+/**
+ * Upload ceilings this deployment can actually honour.
+ * @param hosted True when requests are served by a platform with a body cap.
+ */
+export const uploadLimits = (
+  hosted: boolean,
+): { readonly maxFileBytes: number; readonly maxTotalBytes: number } =>
+  hosted
+    ? {
+        maxFileBytes: Math.min(LIMITS.files.maxFileBytes, HOSTED_FILE_BYTES),
+        maxTotalBytes: Math.min(
+          LIMITS.files.maxTotalBytes,
+          Math.min(LIMITS.files.maxFileBytes, HOSTED_FILE_BYTES) * LIMITS.files.maxCount,
+        ),
+      }
+    : { maxFileBytes: LIMITS.files.maxFileBytes, maxTotalBytes: LIMITS.files.maxTotalBytes };
+
 export interface SliderSpec {
   readonly min: number;
   readonly max: number;

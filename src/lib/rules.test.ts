@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { LIMITS, computeOverlapTokens, estimateTokens, snapToStep } from "@/lib/rules";
+import { LIMITS, computeOverlapTokens, estimateTokens, megabytes, snapToStep, uploadLimits } from "@/lib/rules";
 
 /**
  * Chunk-overlap maths is the one place where an off-by-one silently degrades
@@ -48,6 +48,27 @@ describe("computeOverlapTokens", () => {
 
   it("survives NaN input", () => {
     expect(computeOverlapTokens(512, Number.NaN)).toBe(computeOverlapTokens(512, 10));
+  });
+});
+
+describe("uploadLimits", () => {
+  it("gives a self-hosted deployment the full app allowance", () => {
+    expect(uploadLimits(false)).toEqual({
+      maxFileBytes: 5 * 1024 * 1024,
+      maxTotalBytes: 15 * 1024 * 1024,
+    });
+  });
+
+  it("holds a hosted deployment below the platform's 4.5 MB request cap", () => {
+    const limits = uploadLimits(true);
+
+    // Three megabytes of PDF is four megabytes of base64, which still fits the
+    // platform's body limit — the point is that the app refuses the upload itself
+    // rather than letting the platform answer with an opaque 413.
+    expect(limits.maxFileBytes).toBe(3 * 1024 * 1024);
+    expect(limits.maxTotalBytes).toBe(9 * 1024 * 1024);
+    expect(limits.maxFileBytes * (4 / 3)).toBeLessThan(4_500_000);
+    expect(megabytes(limits.maxFileBytes)).toBe("3 MB");
   });
 });
 

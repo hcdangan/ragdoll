@@ -321,6 +321,30 @@ const classifyRequestFailure = (error: unknown, url: string): RequestFailure => 
   };
 };
 
+/**
+ * Bodies that mean "this key will never work", whatever status carried them.
+ *
+ * Providers disagree about the status code for a dead key — OpenAI answers 401,
+ * Vocareum answers **400** — and the course keys Vocareum issues expire on a fixed
+ * date. Classifying on the body as well as the status is what turns a wall of raw
+ * JSON into "your key has expired".
+ */
+const AUTH_FAILURE_HINTS: readonly string[] = [
+  "invalid key",
+  "invalid api key",
+  "incorrect api key",
+  "key was not found",
+  "authentication fails",
+  "invalid_api_key",
+  "unauthorized",
+];
+
+/** True when the provider's own words describe a rejected credential. */
+const describesRejectedKey = (detail: string): boolean => {
+  const haystack = detail.toLowerCase();
+  return AUTH_FAILURE_HINTS.some((hint) => haystack.includes(hint));
+};
+
 /** Maps a non-2xx response to its failure, calling out rejected keys. */
 const classifyStatusFailure = (
   status: number,
@@ -329,9 +353,15 @@ const classifyStatusFailure = (
   nativeOllama: boolean,
 ): RequestFailure => {
   const suffix = detail.length > 0 ? ` ${detail}` : "";
-  if (status === 401 || status === 403) {
+  const rejectedKey =
+    status === 401 || status === 403 || (status === 400 && describesRejectedKey(detail));
+  if (rejectedKey) {
     return {
-      message: "The provider rejected the API key. Check the key and provider selection.",
+      // An expired course key is the common case for a self-issued credential, and
+      // "check the key" sends the user looking for a typo that is not there.
+      message: /expired/i.test(detail)
+        ? "The provider rejected the API key because it has expired. Issue a new key and enter it here."
+        : "The provider rejected the API key. Check the key and provider selection.",
       retryable: false,
       code: "invalid_api_key",
     };

@@ -126,6 +126,8 @@ const en = {
   "documents.dropzone": "Add PDF files",
   "documents.dropzoneHint": "Drag and drop, or browse. PDF only.",
   "documents.limits": "Up to {count} files · {perFile} each · {total} per session.",
+  "documents.limitsHosted":
+    "On this deployment the platform caps the request body at 4.5 MB, so uploads are held below the app's own 5 MB limit.",
   "documents.browse": "Browse files",
   "documents.remove": "Remove {name}",
   "documents.pages": "{count} pages",

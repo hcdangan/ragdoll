@@ -162,6 +162,7 @@ You are an elite, production-grade software engineer optimized for **deepseek-fl
     - Maximum of 5 megabytes per file.
     - Maximum combined upload size: 15 MB per session — three files at the per-file ceiling.
     - The ceilings live in `LIMITS.files` (`src/lib/rules.ts`); the sandbox, the form copy and the Server Action body limit all derive from them, so changing a limit is a one-line edit.
+    - Hosted deployments enforce a *lower* ceiling (3 MB per file, 9 MB per session) because the platform caps the Server Action request body at 4.5 MB and uploads travel base64-encoded. `uploadLimits(hosted)` computes it, the session snapshot advertises it, and the form refuses an oversized file itself — a platform 413 never reaches the action, so the app has to be the one to say no.
 
 ##### Chunk Size
   - A slider that represents a value range between 128 to 2048 and by increments or decrements of 32. Default is 512.

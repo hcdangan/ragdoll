@@ -8,7 +8,7 @@ import {
   resolveEmbeddingModel,
 } from "./providers";
 import { t } from "./i18n";
-import { LIMITS, computeOverlapTokens, megabytes, snapToStep } from "./rules";
+import { LIMITS, computeOverlapTokens, megabytes, snapToStep, uploadLimits } from "./rules";
 import {
   DISTANCE_METRICS,
   PROVIDER_IDS,
@@ -163,8 +163,12 @@ export const validatePipelineForm = (
   const maxInputTokens = snapToStep(values.maxInputTokens, LIMITS.maxInputTokens);
 
   const totalBytes = values.documents.reduce((total, document) => total + document.sizeBytes, 0);
-  if (totalBytes > LIMITS.files.maxTotalBytes) {
-    errors.documents = t("documents.totalTooLarge", { limit: megabytes(LIMITS.files.maxTotalBytes) });
+  // Hosted deployments cap the request body, so the ceiling they enforce is lower
+  // than the app's own: refusing here produces a sentence the user can act on,
+  // where the platform would answer with an opaque 413.
+  const limits = uploadLimits(options.hosted);
+  if (totalBytes > limits.maxTotalBytes) {
+    errors.documents = t("documents.totalTooLarge", { limit: megabytes(limits.maxTotalBytes) });
   }
   if (values.documents.length > LIMITS.files.maxCount) {
     errors.documents = t("documents.tooMany", { count: LIMITS.files.maxCount });
@@ -178,12 +182,12 @@ export const validatePipelineForm = (
     // size is what the client measured and what the session stores, and the
     // decoded length catches a truncated or mismatched payload.
     if (
-      document.sizeBytes > LIMITS.files.maxFileBytes ||
-      base64ByteLength(document.base64) > LIMITS.files.maxFileBytes
+      document.sizeBytes > limits.maxFileBytes ||
+      base64ByteLength(document.base64) > limits.maxFileBytes
     ) {
       errors.documents = t("documents.tooLarge", {
         name: document.name,
-        limit: megabytes(LIMITS.files.maxFileBytes),
+        limit: megabytes(limits.maxFileBytes),
       });
       break;
     }
@@ -233,12 +237,18 @@ export interface ClientDocumentCheck {
 /**
  * Applies the upload limits in the browser so the user gets instant feedback.
  * The Server Action re-checks everything: this is convenience, not enforcement.
+ *
+ * Limits are passed in because they depend on the deployment: a hosted platform
+ * caps the request body, so the form must refuse an upload it cannot deliver
+ * instead of letting the request die at the platform edge.
  * @param existing Documents already attached.
  * @param incoming Newly selected files.
+ * @param limits Effective per-file and per-session ceilings.
  */
 export const checkClientDocuments = (
   existing: readonly PendingDocument[],
   incoming: readonly PendingDocument[],
+  limits: { readonly maxFileBytes: number; readonly maxTotalBytes: number } = LIMITS.files,
 ): ClientDocumentCheck => {
   const accepted: PendingDocument[] = [];
   const errors: string[] = [];
@@ -258,14 +268,14 @@ export const checkClientDocuments = (
       errors.push(t("documents.notPdf", { name: document.name }));
       continue;
     }
-    if (document.sizeBytes > LIMITS.files.maxFileBytes) {
+    if (document.sizeBytes > limits.maxFileBytes) {
       errors.push(
-        t("documents.tooLarge", { name: document.name, limit: megabytes(LIMITS.files.maxFileBytes) }),
+        t("documents.tooLarge", { name: document.name, limit: megabytes(limits.maxFileBytes) }),
       );
       continue;
     }
-    if (totalBytes + document.sizeBytes > LIMITS.files.maxTotalBytes) {
-      errors.push(t("documents.totalTooLarge", { limit: megabytes(LIMITS.files.maxTotalBytes) }));
+    if (totalBytes + document.sizeBytes > limits.maxTotalBytes) {
+      errors.push(t("documents.totalTooLarge", { limit: megabytes(limits.maxTotalBytes) }));
       break;
     }
     totalBytes += document.sizeBytes;
